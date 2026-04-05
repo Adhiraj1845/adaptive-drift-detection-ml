@@ -1,7 +1,4 @@
 class CUSUMDetector:
-    """
-    Simple CUSUM for concept drift.
-    """
 
     def __init__(self, threshold: float = 5.0, drift: float = 0.01):
         self.threshold = threshold
