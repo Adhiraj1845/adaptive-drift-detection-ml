@@ -14,9 +14,6 @@ def sliding_window_retrain(model, X, y, window_size=500):
 
 
 def ensemble_refresh(ensemble: list, new_model):
-    """
-    Replace worst performing model in ensemble.
-    """
     if not ensemble:
         ensemble.append(new_model)
         return ensemble

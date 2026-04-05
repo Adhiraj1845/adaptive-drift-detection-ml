@@ -1,17 +1,8 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Sequence, Optional
-import numpy as np
 
 
 class DriftController:
-    """
-    Unified controller for:
-    - Feature drift
-    - Prediction drift
-    - Performance drift
-    - Calibrated Drift Index
-    - Tiered adaptive response
-    """
 
     def __init__(
         self,
@@ -42,47 +33,34 @@ class DriftController:
         self.cooldown_days = cooldown_days
         self.last_adaptation_date = None
 
-    # =============================
-    # Drift score computation
-    # =============================
-
     def feature_drift_score(self, reference: Sequence[float], window: Sequence[float]) -> float:
         if not self.feature_detectors:
             return 0.0
-
         scores = []
         for det in self.feature_detectors:
-            if hasattr(det, "score"):
-                scores.append(det.score(reference, window))
-            elif hasattr(det, "compute_psi"):
-                scores.append(det.compute_psi(reference, window))
+            if hasattr(det, "compute_psi"):
+                scores.append(min(det.compute_psi(reference, window) / 0.5, 1.0))  # PSI [0,∞) → [0,1]
+            elif hasattr(det, "score"):
+                scores.append(min(det.score(reference, window) / 0.693, 1.0))  # JS [0,ln2] → [0,1]
             elif hasattr(det, "ks_statistic"):
-                scores.append(det.ks_statistic(reference, window))
-
+                scores.append(float(det.ks_statistic(reference, window)))  # KS already [0,1]
         if not scores:
             return 0.0
-
         return float(max(scores))
 
     def prediction_drift_score(self, ref_preds, cur_preds) -> float:
         if self.prediction_detector is None:
             return 0.0
-        return float(self.prediction_detector.score(ref_preds, cur_preds))
+        return float(min(self.prediction_detector.score(ref_preds, cur_preds) / 0.693, 1.0))  # JS → [0,1]
 
     def performance_drift_score(self, loss_value: float) -> float:
         if self.performance_detector is None:
             return 0.0
-
         triggered = self.performance_detector.update(loss_value)
         stat = self.performance_detector.statistic()
-
         if triggered:
             return float(stat)
         return float(stat)
-
-    # =============================
-    # Drift Index
-    # =============================
 
     def compute_drift_index(
         self,
@@ -96,10 +74,6 @@ class DriftController:
             + self.weights["performance"] * performance_score
         )
 
-    # =============================
-    # Decision logic
-    # =============================
-
     def decide_action(self, drift_index: float) -> str:
         if drift_index < self.control_limits["low"]:
             return "none"
@@ -107,9 +81,10 @@ class DriftController:
             return "moderate"
         elif drift_index < self.control_limits["high"]:
             return "high"
-        elif drift_index >= self.control_limits["high"]:
+        elif drift_index < self.control_limits["severe"]:
             return "severe"
-        return "none"
+        else:
+            return "severe"
 
     def in_cooldown(self, current_date) -> bool:
         if self.last_adaptation_date is None:
