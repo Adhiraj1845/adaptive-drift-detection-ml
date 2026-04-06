@@ -28,6 +28,7 @@ import argparse
 import sys
 import time
 import traceback
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
 from pathlib import Path
 
@@ -80,6 +81,40 @@ def _make_cfg(ticker: str, period: str, window_size: int, cooldown: int):
     )
 
 
+def _run_one(args: tuple) -> dict:
+    """Worker function for parallel execution."""
+    ticker, period, ws, cd = args
+    try:
+        import sys
+        from pathlib import Path
+        _root = Path(__file__).resolve().parents[2]
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        from main import run_pipeline
+        cfg = _make_cfg(ticker, period, ws, cd)
+        t0 = time.time()
+        res = run_pipeline(cfg, _quiet=True, _window_size=ws, _cooldown_days=cd)
+        elapsed = time.time() - t0
+        return {
+            "ticker":         ticker,
+            "period":         period,
+            "window_size":    ws,
+            "cooldown_days":  cd,
+            "acc_delta":      round(res.get("acc_delta",      float("nan")), 4),
+            "sharpe_delta":   round(res.get("sharpe_delta",   float("nan")), 4),
+            "n_retrains":     res.get("n_retrains", 0),
+            "n_drift_events": res.get("n_drift_events", 0),
+            "elapsed_s":      round(elapsed, 1),
+            "status":         "ok",
+        }
+    except Exception as e:
+        return {
+            "ticker": ticker, "period": period,
+            "window_size": ws, "cooldown_days": cd,
+            "status": "error", "error": str(e)[:120],
+        }
+
+
 def run_sensitivity(
     tickers: list[str] | None = None,
     periods: list[str] | None = None,
@@ -87,46 +122,33 @@ def run_sensitivity(
     cooldown_days: list[int] = _COOLDOWN_DAYS,
     csv_out:   str = "results/sensitivity_analysis.csv",
     chart_out: str = "results/sensitivity_charts.png",
+    n_workers: int = 8,
 ) -> pd.DataFrame:
-
-    from main import run_pipeline
 
     tickers = tickers or _DEFAULT_TICKERS
     periods = periods or list(_PERIODS.keys())
 
     combos = list(product(tickers, periods, window_sizes, cooldown_days))
     print(f"Sensitivity grid: {len(window_sizes)}×{len(cooldown_days)} params × "
-          f"{len(tickers)} tickers × {len(periods)} periods = {len(combos)} runs")
+          f"{len(tickers)} tickers × {len(periods)} periods = {len(combos)} runs "
+          f"(workers={n_workers})")
 
     records = []
-    for i, (ticker, period, ws, cd) in enumerate(combos, 1):
-        cfg = _make_cfg(ticker, period, ws, cd)
-        try:
-            t0 = time.time()
-            res = run_pipeline(cfg, _quiet=True, _window_size=ws, _cooldown_days=cd)
-            elapsed = time.time() - t0
-            records.append({
-                "ticker":        ticker,
-                "period":        period,
-                "window_size":   ws,
-                "cooldown_days": cd,
-                "acc_delta":     round(res.get("acc_delta",     float("nan")), 4),
-                "sharpe_delta":  round(res.get("sharpe_delta",  float("nan")), 4),
-                "n_retrains":    res.get("n_retrains", 0),
-                "n_drift_events":res.get("n_drift_events", 0),
-                "elapsed_s":     round(elapsed, 1),
-                "status":        "ok",
-            })
-            print(f"  [{i:3d}/{len(combos)}] {ticker} {period} w={ws:3d} c={cd:2d} "
-                  f"→ acc_delta={records[-1]['acc_delta']:+.4f}  "
-                  f"sharpe_delta={records[-1]['sharpe_delta']:+.4f}")
-        except Exception as e:
-            records.append({
-                "ticker": ticker, "period": period,
-                "window_size": ws, "cooldown_days": cd,
-                "status": "error", "error": str(e)[:120],
-            })
-            print(f"  [{i:3d}/{len(combos)}] {ticker} {period} w={ws} c={cd} → ERROR: {e}")
+    completed = 0
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_run_one, combo): combo for combo in combos}
+        for fut in as_completed(futures):
+            completed += 1
+            rec = fut.result()
+            records.append(rec)
+            ticker, period, ws, cd = futures[fut]
+            if rec["status"] == "ok":
+                print(f"  [{completed:3d}/{len(combos)}] {ticker} {period} w={ws:3d} c={cd:2d} "
+                      f"→ acc_delta={rec['acc_delta']:+.4f}  "
+                      f"sharpe_delta={rec['sharpe_delta']:+.4f}")
+            else:
+                print(f"  [{completed:3d}/{len(combos)}] {ticker} {period} w={ws} c={cd} "
+                      f"→ ERROR: {rec.get('error', '?')}")
 
     df_out = pd.DataFrame(records)
     df_out.to_csv(csv_out, index=False)
@@ -249,10 +271,12 @@ if __name__ == "__main__":
     parser.add_argument("--periods", nargs="+", default=None)
     parser.add_argument("--windows", nargs="+", type=int, default=_WINDOW_SIZES)
     parser.add_argument("--cooldowns", nargs="+", type=int, default=_COOLDOWN_DAYS)
+    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
     run_sensitivity(
         tickers=args.tickers,
         periods=args.periods,
         window_sizes=args.windows,
         cooldown_days=args.cooldowns,
+        n_workers=args.workers,
     )
