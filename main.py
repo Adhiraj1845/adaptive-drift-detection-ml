@@ -211,7 +211,7 @@ def calibrate_from_baseline(
     return calibrate_control_limits(baseline_indices)
 
 
-def run_pipeline(cfg, _quiet: bool = False) -> dict:
+def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_days: int = 5) -> dict:
     t0 = time.time()
     os.makedirs("results", exist_ok=True)
     os.makedirs("data/raw", exist_ok=True)
@@ -362,7 +362,7 @@ def run_pipeline(cfg, _quiet: bool = False) -> dict:
     if "Return" not in monitor_features:
         monitor_features = ["Return"]
 
-    window_size = 100
+    window_size = _window_size
 
     reference = {f: train_df[f].astype(float).tolist()[-window_size:] for f in monitor_features}
     rolling_feat: dict[str, list[float]] = {f: [] for f in monitor_features}
@@ -399,7 +399,7 @@ def run_pipeline(cfg, _quiet: bool = False) -> dict:
         performance_detector=ph,
         weights=_weights,
         control_limits=None,
-        cooldown_days=5,
+        cooldown_days=_cooldown_days,
     )
 
     print(f"[7/10] Calibrating drift control limits from {cfg.train_start} to {cfg.train_end}...", flush=True)
