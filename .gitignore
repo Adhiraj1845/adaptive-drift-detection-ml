@@ -22,3 +22,8 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Byte-compiled / optimised files
+*.pyc
+*.pyo
+__pycache__/
