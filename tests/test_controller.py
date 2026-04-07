@@ -88,12 +88,13 @@ class TestDriftController:
         assert ctrl.feature_drift_score([1, 2, 3], [4, 5, 6]) == pytest.approx(0.0)
 
     def test_feature_drift_score_uses_max(self):
-        class ScoreThree:
-            def score(self, *_): return 3.0
-        class ScoreFive:
-            def score(self, *_): return 5.0
-        ctrl = self._ctrl(feature_dets=[ScoreThree(), ScoreFive()])
-        assert ctrl.feature_drift_score([], []) == pytest.approx(5.0)
+        # KS scores are already in [0,1] — use them to verify max() not mean()
+        class KSLow:
+            def ks_statistic(self, *_): return 0.3
+        class KSHigh:
+            def ks_statistic(self, *_): return 0.7
+        ctrl = self._ctrl(feature_dets=[KSLow(), KSHigh()])
+        assert ctrl.feature_drift_score([], []) == pytest.approx(0.7)
 
     def test_prediction_drift_score_zero_no_detector(self):
         ctrl = self._ctrl()
@@ -120,11 +121,17 @@ class TestCalibrateControlLimits:
             assert isinstance(v, float)
 
     def test_percentile_values_correct(self):
-        scores = list(range(1, 1001))  # uniform [1, 1000]
+        # Scores in [0, 0.20] so clamping bounds don't obscure the percentile extraction
+        rng = np.random.default_rng(0)
+        scores = list(rng.uniform(0.0, 0.20, 1000))
         limits = calibrate_control_limits(scores)
-        assert limits["low"] == pytest.approx(np.percentile(scores, 90), rel=1e-6)
-        assert limits["moderate"] == pytest.approx(np.percentile(scores, 95), rel=1e-6)
-        assert limits["high"] == pytest.approx(np.percentile(scores, 99), rel=1e-6)
+        # calibration uses 60/75/90/95th percentiles with clamp bounds
+        expected_low      = float(max(min(np.percentile(scores, 60), 0.30), 0.05))
+        expected_moderate = float(max(min(np.percentile(scores, 75), 0.50), 0.10))
+        expected_high     = float(max(min(np.percentile(scores, 90), 0.70), 0.20))
+        assert limits["low"]      == pytest.approx(expected_low,      rel=1e-6)
+        assert limits["moderate"] == pytest.approx(expected_moderate, rel=1e-6)
+        assert limits["high"]     == pytest.approx(expected_high,     rel=1e-6)
 
 
 # ── Adaptation strategies ─────────────────────────────────────────────────────
