@@ -56,11 +56,8 @@ class DriftController:
     def performance_drift_score(self, loss_value: float) -> float:
         if self.performance_detector is None:
             return 0.0
-        triggered = self.performance_detector.update(loss_value)
-        stat = self.performance_detector.statistic()
-        if triggered:
-            return float(stat)
-        return float(stat)
+        self.performance_detector.update(loss_value)
+        return float(self.performance_detector.statistic())
 
     def compute_drift_index(
         self,
@@ -77,14 +74,11 @@ class DriftController:
     def decide_action(self, drift_index: float) -> str:
         if drift_index < self.control_limits["low"]:
             return "none"
-        elif drift_index < self.control_limits["moderate"]:
+        if drift_index < self.control_limits["moderate"]:
             return "moderate"
-        elif drift_index < self.control_limits["high"]:
+        if drift_index < self.control_limits["high"]:
             return "high"
-        elif drift_index < self.control_limits["severe"]:
-            return "severe"
-        else:
-            return "severe"
+        return "severe"
 
     def in_cooldown(self, current_date) -> bool:
         if self.last_adaptation_date is None:

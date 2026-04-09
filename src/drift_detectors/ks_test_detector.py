@@ -3,7 +3,20 @@ from typing import Sequence
 
 
 class KSTestDetector:
-    # p_threshold is a threshold on D (the KS statistic), not a p-value
+    """Two-sample Kolmogorov-Smirnov drift detector.
+
+    Measures the maximum absolute difference between two empirical CDFs:
+        D = sup_x |F_ref(x) - F_cur(x)|
+
+    D is bounded in [0, 1] and requires no distributional assumptions.
+    Sensitive to shifts anywhere in the distribution, including tails.
+    Critical value at alpha=0.05: D_alpha ≈ 1.36 * sqrt((n+m)/(n*m)).
+
+    Parameters
+    ----------
+    p_threshold : float
+        Detection threshold on D (not a p-value). Default 0.05.
+    """
 
     def __init__(self, p_threshold: float = 0.05):
         self.threshold = float(p_threshold)
