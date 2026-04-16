@@ -50,8 +50,31 @@ main.py
 ├── visualisation/
 │   └── plots.py                       all diagnostic charts
 ├── experiments/
-│   ├── synthetic_benchmark.py         controlled drift benchmarks
-│   └── ablation.py                    per-detector ablation study
+│   ├── synthetic_benchmark.py         controlled drift benchmarks (abrupt/gradual/concept)
+│   ├── ablation.py                    per-detector on/off ablation (3,332 runs)
+│   ├── detector_ablation.py           16-combo detector ablation with McNemar tests
+│   ├── retrain_ablation.py            5 retrain strategy comparison (980 runs)
+│   ├── ablation_mcnemar.py            per-run McNemar tests across all 4,312 ablation runs
+│   ├── bootstrap_ci.py                BCa bootstrap CIs on headline metrics
+│   ├── sensitivity_analysis.py        hyperparameter grid: window × cooldown (575 runs)
+│   ├── drift_conditional_analysis.py  drift-active vs quiet-period accuracy split
+│   ├── period_deepdive.py             per-year performance breakdown
+│   ├── regime_analysis.py             volatility regime modulation (Kruskal-Wallis)
+│   ├── sharpe_decomposition.py        prediction quality vs conviction sizing attribution
+│   ├── error_trigger_analysis.py      why error_rate_trigger is redundant (11.1-day lag)
+│   ├── risk_adjusted_metrics.py       Sortino, Calmar, IR, CVaR evaluation
+│   ├── information_coefficient.py     IC/ICIR analysis (Grinold & Kahn framework)
+│   ├── transaction_cost_analysis.py   break-even cost analysis across 4,312 runs
+│   ├── financial_baselines.py         vs SMA crossover, buy-and-hold, momentum
+│   ├── hybrid_switching_strategy.py   drift-active-only prediction switching
+│   ├── feature_importance_analysis.py feature drift importance by market regime
+│   ├── market_event_analysis.py       drift alarm alignment with 10 macro events
+│   ├── computational_cost_analysis.py cost-efficiency frontier across detector configs
+│   └── generate_missing_figures.py    architecture diagram + supplementary figures
+├── api.py                             FastAPI backend serving experiment results
+├── frontend/                          React/TypeScript dashboard (Vite + Tailwind)
+│   ├── src/pages/                     Dashboard, DriftAnalysis, EquityCurves, Correlations
+│   └── dist/                          production build
 └── utils/
     └── cli.py                         interactive run-configuration wizard
 ```
@@ -104,10 +127,10 @@ Calibration replays the training set through the detector stack to learn data-dr
 
 | Tier     | Percentile     | Action                                       |
 |----------|----------------|----------------------------------------------|
-| none     | < 90th         | No action                                    |
-| moderate | 90th – 95th    | Weighted update (recent rows upweighted)     |
-| high     | 95th – 99th    | Sliding-window retrain (last 500 rows)       |
-| severe   | 99th – 99.9th  | Full ensemble refresh with new model         |
+| none     | < 60th         | No action                                    |
+| moderate | 60th – 75th    | Weighted update (recent rows upweighted)     |
+| high     | 75th – 90th    | Sliding-window retrain (last 500 rows)       |
+| severe   | ≥ 90th         | Full ensemble refresh with new model         |
 
 A 5-day cooldown prevents repeated retraining on the same drift event.
 
@@ -229,17 +252,34 @@ pip install -r requirements.txt
 # Run the interactive configuration wizard
 python main.py
 
-# Run synthetic benchmark (all three drift scenarios)
+# Run all 19 experiments (reproduces all results in results/)
 python -m src.experiments.synthetic_benchmark
+python -m src.experiments.detector_ablation
+python -m src.experiments.retrain_ablation
+python -m src.experiments.ablation_mcnemar
+python -m src.experiments.bootstrap_ci
+python -m src.experiments.sensitivity_analysis
+python -m src.experiments.drift_conditional_analysis
+python -m src.experiments.period_deepdive
+python -m src.experiments.regime_analysis
+python -m src.experiments.sharpe_decomposition
+python -m src.experiments.error_trigger_analysis
+python -m src.experiments.risk_adjusted_metrics
+python -m src.experiments.information_coefficient
+python -m src.experiments.transaction_cost_analysis
+python -m src.experiments.financial_baselines
+python -m src.experiments.hybrid_switching_strategy
+python -m src.experiments.feature_importance_analysis
+python -m src.experiments.market_event_analysis
+python -m src.experiments.computational_cost_analysis
+python -m src.experiments.generate_missing_figures
 
-# Run ablation study (all detectors × all scenarios)
-python -m src.experiments.ablation
+# Run the test suite
+python -m pytest tests/ -q
 
-# Regenerate charts for existing results
-python -m src.visualisation.plots results/
-
-# Run statistical evaluation on existing results
-python -m src.evaluation.run_report results/
+# Start the results dashboard (requires node/npm for frontend build)
+start_dashboard.bat         # Windows
+# or: python api.py          # backend only (serves results/ as JSON)
 ```
 
 ### Recommended minimum run parameters
@@ -287,12 +327,20 @@ The `<tag>` defaults to `<ticker>_<train_start>_<train_end>__<eval_start>_<eval_
 
 ```
 adaptive-drift-detection-ml/
-├── main.py
+├── main.py                    pipeline entry point
+├── api.py                     FastAPI backend for dashboard
 ├── requirements.txt
 ├── README.md
+├── REFERENCES.md              full citation list (72 references)
+├── configs/                   per-experiment JSON run configurations
 ├── data/
-│   └── raw/                   cached downloaded data
-├── results/                   all run outputs (CSVs + charts)
+│   └── raw/                   cached downloaded data (Yahoo Finance / FRED / CSV)
+├── frontend/                  React/TypeScript results dashboard
+│   ├── src/
+│   └── dist/
+├── results/                   all run outputs (CSVs + charts, 19 experiments)
+│   └── EXPERIMENTS.md         index of all 19 experiments with findings
+├── tests/                     121 unit tests
 └── src/
     ├── data_loader.py
     ├── model/
@@ -300,6 +348,6 @@ adaptive-drift-detection-ml/
     ├── controller/
     ├── evaluation/
     ├── visualisation/
-    ├── experiments/
+    ├── experiments/           19 experiment scripts (10,000+ total runs)
     └── utils/
 ```
