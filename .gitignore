@@ -19,8 +19,6 @@ data/
 Thumbs.db
 .vscode/
 .idea/
-
-# Claude Code
 .claude/
 
 # Byte-compiled / optimised files
