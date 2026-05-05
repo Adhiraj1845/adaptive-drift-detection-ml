@@ -1,11 +1,6 @@
 """
 Tests for src/data_loader.py
 
-Covers:
-- add_features: expected columns, no inf/NaN, binary target, schema renaming,
-  value-only schema (no OHLCV features), rolling windows
-- infer_schema: OHLCV detection, value-only, close-only
-- load_csv / save_csv: round-trip, date_col parameter
 """
 import os
 

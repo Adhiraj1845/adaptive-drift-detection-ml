@@ -1,10 +1,6 @@
 """
 Tests for drift detectors.
 
-Each detector is tested for:
-- True negative (no drift on identical/same-distribution data)
-- True positive (drift on clearly shifted data)
-- Magnitude / monotonicity properties where applicable
 """
 import numpy as np
 import pytest

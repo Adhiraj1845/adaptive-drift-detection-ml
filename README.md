@@ -1,353 +1,130 @@
 # Adaptive Drift Detection for Financial Time Series
+**COMP3931 Individual Project — Adhiraj Kumar — University of Leeds 2025/26**
 
-A framework for detecting and adapting to distribution shift in financial time-series binary classification tasks. The system trains a static baseline model alongside an adaptive model that monitors incoming data, detects covariate and concept drift, and triggers tiered retraining when the data distribution departs from the training distribution.
-
----
-
-## Problem Statement
-
-A classifier trained on historical financial data is deployed in a non-stationary environment. Market regimes, volatility clusters, and macro-economic shifts cause the input distribution P(X) and the conditional P(Y|X) to change over time, degrading model performance. The goal is to detect these changes as quickly as possible and retrain the model before degradation compounds, while keeping false alarm rates low.
+An adaptive machine learning framework that detects distribution shift in financial time-series data and triggers tiered model retraining before accuracy degrades. Evaluated across 4,312 runs on 50 instruments over ten years.
 
 ---
 
-## Overview
+## For Assessors: Getting Started
 
-The pipeline runs in four stages:
+### 1. Prerequisites
 
-1. **Feature engineering** — price data (OHLCV or single-value) is transformed into a feature matrix with rolling return statistics, volatility estimates, momentum, and drawdown features. The prediction target is next-day return direction (binary).
+- Python 3.12 (tested on 3.12.4)
+- Node.js 18+ (only needed to rebuild the frontend — the pre-built `frontend/dist/` is already committed)
 
-2. **Baseline training** — both a static model (frozen for the entire evaluation period) and an adaptive model (subject to retraining) are trained on the same training window and scaled with a `RobustScaler` fitted on that window.
-
-3. **Calibration** — the drift control limits (alarm thresholds) are learned by replaying the training period through the full detector stack. The 90th / 95th / 99th / 99.9th percentiles of drift indices observed in-sample become the `low / moderate / high / severe` limits. A `max_ph_stat` normalization factor for the Page-Hinkley detector is extracted at this stage.
-
-4. **Streaming evaluation** — each day in the evaluation period is processed sequentially. Drift scores are computed, a composite drift index is formed, an action tier is selected, and (if not in cooldown) the adaptive model is retrained. Predictions from both models are logged alongside all drift diagnostics.
-
----
-
-## Architecture
-
-```
-main.py
-├── data_loader.py                     download / load / feature-engineer data
-├── model/
-│   ├── random_forest_model.py         sklearn RF wrapper
-│   ├── logistic_regression_model.py   sklearn LR wrapper
-│   └── gradient_boosting_model.py     sklearn GBM wrapper
-├── drift_detectors/
-│   ├── ks_test_detector.py            Kolmogorov-Smirnov D-statistic
-│   ├── psi_detector.py                Population Stability Index
-│   ├── js_divergence_detector.py      Jensen-Shannon divergence
-│   ├── page_hinkley_detector.py       sequential mean-shift monitor
-│   ├── prediction_drift_detector.py   JS on model output probabilities
-│   └── drift_index.py                 voting-based index (utility)
-├── controller/
-│   ├── drift_controller.py            composite drift index + action dispatch
-│   ├── calibration.py                 percentile-based threshold learning
-│   └── adaptation.py                  weighted update / sliding-window / ensemble refresh
-├── evaluation/
-│   ├── significance.py                McNemar, OLS, bootstrap Sharpe & AUC CI
-│   └── run_report.py                  full statistical report + per-period breakdown
-├── visualisation/
-│   └── plots.py                       all diagnostic charts
-├── experiments/
-│   ├── synthetic_benchmark.py         controlled drift benchmarks (abrupt/gradual/concept)
-│   ├── ablation.py                    per-detector on/off ablation (3,332 runs)
-│   ├── detector_ablation.py           16-combo detector ablation with McNemar tests
-│   ├── retrain_ablation.py            5 retrain strategy comparison (980 runs)
-│   ├── ablation_mcnemar.py            per-run McNemar tests across all 4,312 ablation runs
-│   ├── bootstrap_ci.py                BCa bootstrap CIs on headline metrics
-│   ├── sensitivity_analysis.py        hyperparameter grid: window × cooldown (575 runs)
-│   ├── drift_conditional_analysis.py  drift-active vs quiet-period accuracy split
-│   ├── period_deepdive.py             per-year performance breakdown
-│   ├── regime_analysis.py             volatility regime modulation (Kruskal-Wallis)
-│   ├── sharpe_decomposition.py        prediction quality vs conviction sizing attribution
-│   ├── error_trigger_analysis.py      why error_rate_trigger is redundant (11.1-day lag)
-│   ├── risk_adjusted_metrics.py       Sortino, Calmar, IR, CVaR evaluation
-│   ├── information_coefficient.py     IC/ICIR analysis (Grinold & Kahn framework)
-│   ├── transaction_cost_analysis.py   break-even cost analysis across 4,312 runs
-│   ├── financial_baselines.py         vs SMA crossover, buy-and-hold, momentum
-│   ├── hybrid_switching_strategy.py   drift-active-only prediction switching
-│   ├── feature_importance_analysis.py feature drift importance by market regime
-│   ├── market_event_analysis.py       drift alarm alignment with 10 macro events
-│   ├── computational_cost_analysis.py cost-efficiency frontier across detector configs
-│   └── generate_missing_figures.py    architecture diagram + supplementary figures
-├── api.py                             FastAPI backend serving experiment results
-├── frontend/                          React/TypeScript dashboard (Vite + Tailwind)
-│   ├── src/pages/                     Dashboard, DriftAnalysis, EquityCurves, Correlations
-│   └── dist/                          production build
-└── utils/
-    └── cli.py                         interactive run-configuration wizard
-```
-
----
-
-## Drift Detection
-
-Three complementary detectors operate on a rolling window of `window_size = 100` observations compared against a reference window of equal size.
-
-### Kolmogorov-Smirnov Test
-
-Computes the two-sample KS statistic D = max|F_ref(x) − F_cur(x)|. The implementation walks both sorted arrays in O((n+m) log(n+m)) time without constructing explicit CDFs. The critical value formula D_α ≈ c(α) · √((n+m)/(nm)) with c = {1.22, 1.36, 1.63} for α = {0.10, 0.05, 0.01} is available but the primary output is the raw D statistic, which enters the composite index as a score in [0, 1].
-
-### Population Stability Index
-
-PSI = Σᵢ (Pᵢ − Qᵢ) · ln(Pᵢ / Qᵢ) over histogram bins, measuring how much a distribution has shifted relative to a reference. Bins are defined by quantiles of the reference distribution to ensure uniform expected counts. Standard interpretation: PSI < 0.1 stable, 0.1–0.2 minor shift, > 0.2 significant shift.
-
-### Jensen-Shannon Divergence
-
-JS(P‖Q) = (KL(P‖M) + KL(Q‖M)) / 2 where M = (P+Q)/2. Bounded in [0, ln 2]. Bin edges span the combined reference + current range so non-overlapping distributions score near ln(2).
-
-### Page-Hinkley Detector
-
-Sequential change-point detector applied to the adaptive model's streaming log-loss. Tracks cumulative deviations from the online mean:
-
-```
-m_t = Σ(xᵢ − μᵢ − δ)
-stat_increase = m_t − min(m_t)
-stat_decrease = max(m_t) − m_t
-```
-
-Direction can be `increase`, `decrease`, or `both`. Because the statistic is unbounded (it grows as a cumulative sum), it is normalized at runtime: `performance_score = min(ph.statistic() / max_ph_stat, 3.0)`, where `max_ph_stat` is the maximum PH statistic observed during the calibration period.
-
-### Composite Drift Index
-
-```
-drift_index = 0.4 · feature_score
-            + 0.3 · prediction_score
-            + 0.3 · performance_score
-```
-
-`feature_score` is the maximum KS/PSI/JS score across all monitored features. `prediction_score` is the JS divergence between the reference probability window and the current probability window. `performance_score` is the normalized Page-Hinkley statistic on adaptive model log-loss.
-
----
-
-## Calibration
-
-Calibration replays the training set through the detector stack to learn data-driven thresholds. A separate model is trained on the training data (also RobustScaler-scaled), and per-row predictions are generated to simulate what the streaming loop will see. The resulting sequence of drift indices is used to compute:
-
-| Tier     | Percentile     | Action                                       |
-|----------|----------------|----------------------------------------------|
-| none     | < 60th         | No action                                    |
-| moderate | 60th – 75th    | Weighted update (recent rows upweighted)     |
-| high     | 75th – 90th    | Sliding-window retrain (last 500 rows)       |
-| severe   | ≥ 90th         | Full ensemble refresh with new model         |
-
-A 5-day cooldown prevents repeated retraining on the same drift event.
-
----
-
-## Feature Engineering
-
-`add_features()` constructs the following from raw price data. Features requiring OHLCV are only computed when high, low, and volume columns are present.
-
-| Feature | Description |
-|---------|-------------|
-| `Return` | Daily percentage return |
-| `LogReturn` | Log return ln(Pₜ / Pₜ₋₁) |
-| `Target` | Binary label: 1 if next-day return > 0 |
-| `HL_Range` | (High − Low) / Close — OHLCV only |
-| `CO_Return` | (Close − Open) / Open — OHLCV only |
-| `Vol_Change` | Volume percentage change — OHLCV only |
-| `Ret_Mean_{w}` | Rolling mean return, w ∈ {5, 10, 20, 60} |
-| `Ret_Vol_{w}` | Rolling return volatility, w ∈ {5, 10, 20, 60} |
-| `Mom_Sum_{w}` | Rolling return sum (momentum), w ∈ {5, 10, 20, 60} |
-| `Vol_Z_{w}` | Volume z-score clipped to ±20 — OHLCV only |
-| `DD_{w}` | Rolling drawdown from rolling max, w ∈ {5, 10, 20, 60} |
-
-All features are scaled with a `RobustScaler` (median + IQR normalization) fitted on the training window before entering any model. The scaler is re-fitted on each retrain window so the adaptive model always works in a consistent feature space regardless of the current distribution.
-
----
-
-## Adaptation Strategies
-
-Three retraining strategies are dispatched based on severity:
-
-**Weighted update** (`moderate`): Re-fits the current adaptive model on all available lookback data with linearly increasing sample weights (0.5 at the oldest row, 1.5 at the most recent). This biases the model toward current regime behavior without discarding history.
-
-**Sliding-window retrain** (`high`): Re-fits on the most recent 500 rows of the lookback window with uniform weights. Useful when the shift is large enough that older data is misleading.
-
-**Ensemble refresh** (`severe`): A new model is trained from scratch and added to a rolling ensemble (max size 3, FIFO eviction). Predictions are the mean probability across all ensemble members. This handles structural breaks where no prior model is reliable.
-
-After any retrain, the reference window resets to the last 100 rows of the retrain dataset, and the Page-Hinkley detector resets to prevent stale cumulative statistics.
-
----
-
-## Statistical Evaluation
-
-`run_evaluation_from_results()` runs a battery of statistical tests on any completed run's output CSVs.
-
-### McNemar Test
-Paired test on whether static and adaptive models make errors on the same observations. Uses the continuity-corrected chi-squared statistic. Tests H₀: equal error rates.
-
-### OLS Regression
-`logloss_adaptive ~ 1 + drift_event` with HC1 (heteroskedasticity-robust) standard errors. Tests whether days flagged as drift are associated with significantly higher log-loss, validating that the drift detector fires on genuinely difficult days.
-
-### Bootstrap Sharpe Difference
-3000-resample bootstrap confidence interval for Sharpe(adaptive) − Sharpe(static) on both long-only and long-short equity curves. If the 95% CI excludes 0, the Sharpe difference is statistically significant.
-
-### Bootstrap AUC Difference
-3000-resample bootstrap CI for AUC(adaptive) − AUC(static) using a rank-based AUC (Mann-Whitney U statistic).
-
-### Multiple-Testing Correction
-All 5 tests are run simultaneously. A Bonferroni-corrected significance level of α = 0.05 / 5 = 0.01 is reported. The bootstrap CIs are at 95%; FWER-corrected conclusions require 99% CIs.
-
-### Per-Period Breakdown
-The evaluation window is sliced into calendar years. Per year: observation count, static accuracy, adaptive accuracy, number of drift events, and Sharpe difference (adaptive − static long-only). This guards against aggregate metrics being driven by a single lucky period.
-
----
-
-## Visualisations
-
-`plot_run()` generates the following charts automatically after each run:
-
-| Chart | Filename | Description |
-|-------|----------|-------------|
-| Rolling log-loss | `chart_rolling_logloss_*.png` | 60-day rolling log-loss, both models, drift events as vertical lines |
-| Rolling accuracy | `chart_rolling_accuracy_*.png` | 60-day rolling accuracy with 50% baseline |
-| Cumulative advantage | `chart_cumulative_advantage_*.png` | Cumulative (static − adaptive) log-loss; positive = adaptive winning |
-| Drift index | `chart_drift_index_*.png` | Composite drift index with colour-coded event markers |
-| Equity curves | `chart_equity_*.png` | All 4 strategies + market buy-and-hold |
-| Model quality | `chart_model_quality_*.png` | 2×2 grid: ROC curve, reliability diagram, precision-recall curve, 30-day rolling log-loss |
-
----
-
-## Synthetic Experiments
-
-### Benchmark (`src/experiments/synthetic_benchmark.py`)
-
-Three synthetic drift scenarios with controlled ground truth:
-
-**Abrupt drift** — pre-drift X ~ N(0,1), post-drift X ~ N(Δμ, σ_vol). Mean shift is instantaneous. Tests detection sensitivity as a function of drift magnitude Δμ.
-
-**Gradual drift** — mean shifts linearly from 0 to Δμ over 200 days then holds flat. Harder to detect early; tests whether detectors can accumulate evidence over a ramp.
-
-**Concept drift** — X ~ N(0,1) throughout (feature marginal is identical pre and post-drift). Pre-drift: P(Y=1|X) = σ(X). Post-drift: P(Y=1|X) = σ(−X) (label sign flip). Feature-based detectors (KS, PSI, JS) should be blind to this and return TPR ≈ FPR, demonstrating why performance monitoring via Page-Hinkley is necessary.
-
-Detection uses a sliding window of 100 observations versus a 250-observation reference. Threshold is calibrated at a 5% FPR from the pre-drift scores. Metrics: TPR, FPR, median detection latency (days after drift), and fraction of seeds where drift was never detected.
-
-### Ablation (`src/experiments/ablation.py`)
-
-Runs the benchmark across 7 drift magnitudes (Δμ ∈ {0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0}) for each of the three scenarios, with 20 seeds per magnitude. Evaluates 4 detector configurations: KS alone, PSI alone, JS alone, and Composite (max of all three). Outputs TPR, latency, and never-detected tables plus a 2-panel chart per scenario.
-
----
-
-## Data Sources
-
-| Source | CLI selection | Notes |
-|--------|---------------|-------|
-| Yahoo Finance | `Yahoo Finance` | Use `^GSPC`, `AAPL`, `SPY`, `GLD`, etc. |
-| FRED | `FRED` | Forward-filled to business-day frequency. E.g. `SP500`, `DGS10`, `FEDFUNDS`. |
-| CSV | `CSV file` | Needs at least a date index and a close/price column. |
-
-Downloaded data is cached at `data/raw/<ticker>_<start>_<end>.csv` and reused on subsequent runs.
-
----
-
-## Quickstart
+### 2. Install dependencies
 
 ```bash
-# Install dependencies
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
 pip install -r requirements.txt
-
-# Run the interactive configuration wizard
-python main.py
-
-# Run all 19 experiments (reproduces all results in results/)
-python -m src.experiments.synthetic_benchmark
-python -m src.experiments.detector_ablation
-python -m src.experiments.retrain_ablation
-python -m src.experiments.ablation_mcnemar
-python -m src.experiments.bootstrap_ci
-python -m src.experiments.sensitivity_analysis
-python -m src.experiments.drift_conditional_analysis
-python -m src.experiments.period_deepdive
-python -m src.experiments.regime_analysis
-python -m src.experiments.sharpe_decomposition
-python -m src.experiments.error_trigger_analysis
-python -m src.experiments.risk_adjusted_metrics
-python -m src.experiments.information_coefficient
-python -m src.experiments.transaction_cost_analysis
-python -m src.experiments.financial_baselines
-python -m src.experiments.hybrid_switching_strategy
-python -m src.experiments.feature_importance_analysis
-python -m src.experiments.market_event_analysis
-python -m src.experiments.computational_cost_analysis
-python -m src.experiments.generate_missing_figures
-
-# Run the test suite
-python -m pytest tests/ -q
-
-# Start the results dashboard (requires node/npm for frontend build)
-start_dashboard.bat         # Windows
-# or: python api.py          # backend only (serves results/ as JSON)
 ```
 
-### Recommended minimum run parameters
+### 3. Run the test suite
 
-| Parameter | Recommended minimum |
-|-----------|-------------------|
-| Training rows | 300 (warning issued below this) |
-| Evaluation rows | 252 (1 year) |
-| `min_retrain_rows` | 400 for daily equity data; 75 for short/sparse series |
-| `retrain_lookback_years` | 5 |
+```bash
+python -m pytest tests/ -v
+```
 
----
+121 tests across 5 modules, all passing. Covers: KS/PSI/JS/PH detector correctness, controller composite index, calibration monotonicity, position gate clip bounds, and the data-layer look-ahead bias prevention check.
 
-## Output Files
+### 4. View all experiment results (dashboard)
 
-All outputs are written to `results/`:
+```bash
+python api.py
+```
 
-| File | Contents |
-|------|----------|
-| `daily_monitoring_<tag>.csv` | Per-day predictions, probabilities, loss values, drift scores, action taken |
-| `drift_events_<tag>.csv` | Days where action ≠ none: tier, scores, top drifting feature, cooldown flag |
-| `rolling_curves_<tag>.csv` | 60-day rolling log-loss for both models |
-| `equity_curves_<tag>.csv` | Equity curves for market, long-only and long-short static/adaptive |
-| `chart_*.png` | All diagnostic charts |
+Then open [http://localhost:8000](http://localhost:8000) in a browser. The dashboard shows drift scores, retrain history, and rolling performance for all completed runs. All experiment results are pre-committed to `results/` — no re-running is needed to view them.
 
-The `<tag>` defaults to `<ticker>_<train_start>_<train_end>__<eval_start>_<eval_end>` and is overridable at the CLI prompt.
+### 5. View results directly
+
+All CSVs and figures are in `results/`. The file `results/EXPERIMENTS.md` is an index of all 23 experiments with their key findings.
 
 ---
 
-## Implementation Notes
-
-**Reference window symmetry** — the reference window and detection window are both 100 rows. Asymmetric sizes (e.g. reference = full training set vs window = 100) bias two-sample statistics toward smaller values, reducing sensitivity. Both windows are kept equal on initialisation, after retraining, and inside the calibration loop.
-
-**PH normalization** — the Page-Hinkley statistic is a cumulative sum and grows without bound in long runs. It is normalized by `max_ph_stat` (the maximum PH value observed during calibration) so it enters the composite index on the same scale as the bounded [0,1] feature and prediction scores. The normalized value is capped at 3.0.
-
-**Scaler re-fitting on retrain** — the `RobustScaler` is re-fitted on each retrain window. Using a scaler fitted on the original training data for post-drift data introduces systematic bias when the distribution has shifted.
-
-**Leakage prevention** — the training dataframe drops its final row before training. The last row's `Target` uses the subsequent row's return; including it would leak a future observation. The same convention applies to retrain windows.
-
-**Cooldown** — a 5-day minimum gap between retraining events prevents thrashing. Events that occur during cooldown are logged (`cooldown_blocked=1`) but trigger no retrain.
-
----
-
-## Directory Structure
+## Repository Structure
 
 ```
 adaptive-drift-detection-ml/
-├── main.py                    pipeline entry point
-├── api.py                     FastAPI backend for dashboard
-├── requirements.txt
-├── README.md
-├── REFERENCES.md              full citation list (72 references)
-├── configs/                   per-experiment JSON run configurations
-├── data/
-│   └── raw/                   cached downloaded data (Yahoo Finance / FRED / CSV)
-├── frontend/                  React/TypeScript results dashboard
-│   ├── src/
-│   └── dist/
-├── results/                   all run outputs (CSVs + charts, 19 experiments)
-│   └── EXPERIMENTS.md         index of all 19 experiments with findings
-├── tests/                     121 unit tests
-└── src/
-    ├── data_loader.py
-    ├── model/
-    ├── drift_detectors/
-    ├── controller/
-    ├── evaluation/
-    ├── visualisation/
-    ├── experiments/           19 experiment scripts (10,000+ total runs)
-    └── utils/
+├── src/
+│   ├── data_loader.py              OHLCV feature engineering (33 features)
+│   ├── model/                      RF, GBM, LR wrappers
+│   ├── drift_detectors/            KS, PSI, JS, PH, prediction drift monitor
+│   ├── controller/
+│   │   ├── drift_controller.py     composite drift index + action dispatch
+│   │   ├── calibration.py          asset-adaptive threshold learning
+│   │   └── adaptation.py          SGD blend / sliding-window / ensemble refresh
+│   ├── evaluation/                 McNemar, BCa bootstrap, IC, Sharpe tests
+│   └── experiments/                23 experiment scripts (all results pre-committed)
+├── results/                        all CSVs and figures (pre-committed, ~4,312 runs)
+│   └── EXPERIMENTS.md              experiment index with findings
+├── tests/                          121 unit tests
+├── configs/                        per-experiment JSON run configurations
+├── api.py                          FastAPI backend
+├── frontend/dist/                  pre-built React dashboard
+├── main.py                         interactive single-run entry point
+└── requirements.txt
 ```
+
+---
+
+## Reproducing Experiments
+
+All 23 experiment scripts are in `src/experiments/`. Results are already committed to `results/`, so re-running is optional. To reproduce a specific experiment:
+
+```bash
+# Example: reproduce the detector ablation (3,332 runs — takes ~2 hours)
+python -m src.experiments.detector_ablation
+
+# Example: reproduce BCa bootstrap CIs (fast, ~5 minutes)
+python -m src.experiments.bootstrap_ci
+
+# Example: reproduce sensitivity analysis (575 runs — takes ~30 minutes)
+python -m src.experiments.sensitivity_analysis
+```
+
+Full list of experiment scripts with estimated runtimes is in `results/EXPERIMENTS.md`.
+
+---
+
+## Framework Overview
+
+The pipeline trains a static baseline model alongside an adaptive model on the same training window. During the evaluation period, four detectors monitor for drift:
+
+| Detector | Signal monitored | Complexity |
+|---|---|---|
+| Kolmogorov-Smirnov | Feature distribution P(X) | O(n log n) |
+| Population Stability Index | Feature distribution P(X) | O(n) |
+| Jensen-Shannon divergence | Prediction distribution P(Ŷ\|X) | O(n) |
+| Page-Hinkley | Rolling log-loss stream | O(1) |
+
+Scores are aggregated into a composite drift index (weights: 0.4 feature / 0.3 prediction / 0.3 performance), EMA-smoothed at α=0.10, and compared against asset-adaptive thresholds calibrated from each instrument's reference window (60th/75th/90th/95th percentiles).
+
+When drift is detected, the controller dispatches one of four actions (none / SGD weighted update / sliding-window retrain / ensemble refresh) subject to a 5-day cooldown. A position gate blends the two model outputs proportionally to the drift index.
+
+---
+
+## Key Results (4,312 runs)
+
+| Metric | Result |
+|---|---|
+| Accuracy delta BCa 95% CI | [+0.0035, +0.0051]★ |
+| Sharpe delta BCa 95% CI | [+0.0842, +0.1098]★ |
+| McNemar win ratio | 3.1:1 (25 Bonferroni wins, 0 static wins) |
+| IC delta | +0.0023 (t=3.58, p=0.0003) |
+| Drift-conditional accuracy gap | 4.6× larger on alarm-active days |
+| Break-even transaction cost | 310 bps median (98.4% viable at 5 bps) |
+
+★ excludes zero at the 95% BCa level.
+
+Documented limitations: log-loss degradation (−0.20, all runs), maximum drawdown amplification (6× worse median), near-zero delta for fixed income and international equity, 2022 tightening cycle failure (architectural ceiling of batch retraining).
+
+---
+
+## Disclaimer
+
+This framework produces model outputs on historical data for academic research purposes only. It does not constitute investment advice and is not connected to any live execution system. Data sourced from Yahoo Finance (personal/research use) and FRED (public domain).

@@ -101,6 +101,8 @@ Engle, R.F. (1982). Autoregressive conditional heteroscedasticity with estimates
 
 Bollerslev, T. (1986). Generalized autoregressive conditional heteroskedasticity. *Journal of Econometrics*, 31(3), 307–327. https://doi.org/10.1016/0304-4076(86)90063-1
 
+Fama, E.F. & French, K.R. (1993). Common risk factors in the returns on stocks and bonds. *Journal of Financial Economics*, 33(1), 3–56. https://doi.org/10.1016/0304-405X(93)90023-5
+
 Rapach, D. & Zhou, G. (2013). Forecasting stock returns. In G. Elliott & A. Timmermann (Eds.), *Handbook of Economic Forecasting*, Vol. 2A, 328–383. Elsevier. https://doi.org/10.1016/B978-0-444-53683-9.00006-2
 
 ---
@@ -136,6 +138,8 @@ Dietterich, T.G. (1998). Approximate statistical tests for comparing supervised 
 Demšar, J. (2006). Statistical comparisons of classifiers over multiple data sets. *Journal of Machine Learning Research*, 7, 1–30. https://jmlr.org/papers/v7/demsar06a.html
 
 Dunn, O.J. (1961). Multiple comparisons among means. *Journal of the American Statistical Association*, 56(293), 52–64. https://doi.org/10.2307/2282330
+
+Kruskal, W.H. & Wallis, W.A. (1952). Use of ranks in one-criterion variance analysis. *Journal of the American Statistical Association*, 47(260), 583–621. https://doi.org/10.2307/2280779
 
 ---
 

@@ -1,11 +1,6 @@
 """
 Tests for all model wrappers: RandomForest, LogisticRegression, GradientBoosting.
 
-Each model is tested for:
-- Correct prediction shape
-- predict_proba output in [0, 1]
-- Predictions are not trivially constant (model learns)
-- predict_proba second column sums to 1 per row
 """
 import numpy as np
 import pandas as pd

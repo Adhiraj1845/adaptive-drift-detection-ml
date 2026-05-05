@@ -1,14 +1,6 @@
 """
 Tests for evaluation modules: metrics, significance, calibration.
 
-Covers:
-- classification_summary_from_daily: perfect/all-wrong predictions
-- drift_detection_metrics: TP/FP/FN/TN correctness
-- episode_summary_from_daily: episode counting
-- mcnemar_test_from_preds: p-value bounds
-- bootstrap_sharpe_diff_ci: zero-diff CI
-- bootstrap_auc_diff_ci: zero-diff CI
-- ols_logloss_on_drift: regression output types
 """
 import numpy as np
 import pandas as pd

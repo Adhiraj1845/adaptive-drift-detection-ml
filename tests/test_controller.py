@@ -1,10 +1,6 @@
 """
 Tests for drift controller, calibration, and adaptation strategies.
 
-Covers:
-- DriftController: compute_drift_index, decide_action, cooldown, feature/prediction scores
-- calibrate_control_limits: correct keys, monotone percentiles
-- Adaptation: weighted_update, sliding_window_retrain, ensemble_refresh
 """
 import datetime
 
