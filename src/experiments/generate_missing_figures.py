@@ -1,16 +1,4 @@
-"""
-Generate the five figures that were missing from results/:
-
-  1. results/architecture_diagram.png      — pipeline flowchart (Methodology)
-  2. results/ablation_detector_chart.png   — 17-config detector comparison (Results)
-  3. results/ablation_asset_chart.png      — per-asset ranked bar chart (Results)
-  4. results/nonstationarity_chart.png     — empirical drift in real data (Background)
-  5. results/retrain_ablation_chart.png    — 5-strategy retrain comparison (Results)
-
-Usage
------
-    python -m src.experiments.generate_missing_figures
-"""
+"""Generate figures missing from results/: architecture diagram, ablation charts, nonstationarity chart."""
 from __future__ import annotations
 
 import sys

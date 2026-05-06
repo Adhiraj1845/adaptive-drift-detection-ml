@@ -1,21 +1,4 @@
-"""
-min_retrain_rows sensitivity analysis.
-
-Tests whether the 2022 Federal Reserve tightening cycle degradation is an
-architectural constraint or a tunable parameter issue.
-
-The hypothesis: no value of min_retrain_rows within the feasible range
-{200, 300, 400, 500} recovers performance in the 2021-2022 sub-period,
-confirming that the 400-row minimum is a batch-learning floor, not a
-mis-set parameter.
-
-Grid: 4 values × 12 tickers × 2 periods (2022-specific and full eval) = 96 runs.
-
-Output
-------
-  results/min_retrain_rows_sensitivity.csv
-  results/min_retrain_rows_chart.png
-"""
+"""min_retrain_rows sensitivity: confirms 400-row minimum is an architectural floor not a tunable parameter."""
 from __future__ import annotations
 
 import sys

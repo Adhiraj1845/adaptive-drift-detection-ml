@@ -1,33 +1,4 @@
-"""
-Transaction cost break-even analysis.
-
-Answers: how large can per-trade transaction costs be before the adaptive
-framework loses its financial advantage over the static baseline?
-
-Method:
-  For each run, compute the net return after deducting round-trip costs c per trade:
-    net_return(t) = pos(t) * market_return(t) - |pos(t) - pos(t-1)| * c
-
-  Find c* such that Sharpe(adaptive, c*) = Sharpe(static, c*).
-  This is the break-even cost.
-
-Context (typical real-world costs):
-  Retail broker:    5–20 bps (0.05–0.20%) per trade
-  Discount online:  1–5 bps
-  Institutional:    0.1–1 bps
-  High frequency:   <0.1 bps
-
-If break-even >> retail costs, the edge is practically exploitable.
-
-Also computes:
-  - Turnover ratio (annual position changes)
-  - Cost-adjusted Sharpe at 5bps and 20bps
-  - Net alpha (excess return over static) at different cost levels
-
-Output
-------
-  results/transaction_cost.csv          -- per-run break-even costs
-  results/transaction_cost_charts.png   -- 4-panel analysis
+"""Transaction cost break-even: Sharpe(adaptive, c*) = Sharpe(static, c*) per run."""
 
 Usage
 -----

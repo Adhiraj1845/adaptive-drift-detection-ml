@@ -1,31 +1,4 @@
-"""
-Systematic detector ablation across 50 assets × 4 time windows × 16 detector combos.
-
-Design
-------
-Assets  : 50 diverse instruments (mega-cap equity, sector/index ETFs, international,
-          fixed income, commodities, crypto).
-Periods : 4 non-overlapping / partially-overlapping windows covering different
-          market regimes:
-            early  – 2010-2014 train / 2015-2019 eval  (pre-COVID bull market)
-            std    – 2010-2017 train / 2018-2024 eval  (standard benchmark window)
-            covid  – 2014-2019 train / 2020-2024 eval  (COVID crash + recovery)
-            recent – 2015-2021 train / 2022-2024 eval  (post-COVID, rate-hike era)
-Combos  : 2^4 = 16 combinations of {KS, PSI, JS, PageHinkley} toggles.
-          PredictionDrift is always on (it is model-output-specific and without it
-          the adaptation signal is blind to model degradation).
-
-Valid configs: assets whose data_start precedes a period's train_end are skipped
-automatically, giving ~180 valid (asset, period) pairs × 16 combos ≈ 2,880 runs.
-
-Usage
------
-    python -m src.experiments.detector_ablation               # all CPU cores
-    python -m src.experiments.detector_ablation --workers -1  # same
-    python -m src.experiments.detector_ablation --workers 8   # explicit count
-    python -m src.experiments.detector_ablation --dry-run     # list jobs only
-    python -m src.experiments.detector_ablation --manifest    # write manifest CSV and exit
-"""
+"""Systematic detector ablation: 50 assets × 4 time windows × 16 detector combos."""
 from __future__ import annotations
 
 import argparse
@@ -38,18 +11,14 @@ from typing import Any
 
 import pandas as pd
 
-# ── 50 assets ──────────────────────────────────────────────────────────────
-# data_start = earliest date we try to fetch.  If a period's train_end is
-# before data_start the config is skipped automatically.
 _BASE_ASSETS: list[dict[str, str]] = [
-    # US mega-cap equities (20)
     {"ticker": "AAPL",    "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "MSFT",    "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "GOOGL",   "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "AMZN",    "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "NVDA",    "data_start": "2010-01-01", "group": "us_equity"},
-    {"ticker": "META",    "data_start": "2013-01-01", "group": "us_equity"},   # IPO May 2012
-    {"ticker": "TSLA",    "data_start": "2011-01-01", "group": "us_equity"},   # IPO Jun 2010
+    {"ticker": "META",    "data_start": "2013-01-01", "group": "us_equity"},   # IPO May 2012 — data sparse before 2013
+    {"ticker": "TSLA",    "data_start": "2011-01-01", "group": "us_equity"},   # IPO Jun 2010 — sparse before 2011
     {"ticker": "JPM",     "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "BAC",     "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "JNJ",     "data_start": "2010-01-01", "group": "us_equity"},
@@ -63,55 +32,40 @@ _BASE_ASSETS: list[dict[str, str]] = [
     {"ticker": "MA",      "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "NFLX",    "data_start": "2010-01-01", "group": "us_equity"},
     {"ticker": "AMD",     "data_start": "2010-01-01", "group": "us_equity"},
-    # US index ETFs (5)
     {"ticker": "SPY",     "data_start": "2010-01-01", "group": "us_index"},
     {"ticker": "QQQ",     "data_start": "2010-01-01", "group": "us_index"},
     {"ticker": "DIA",     "data_start": "2010-01-01", "group": "us_index"},
     {"ticker": "IWM",     "data_start": "2010-01-01", "group": "us_index"},
     {"ticker": "VTI",     "data_start": "2010-01-01", "group": "us_index"},
-    # Sector ETFs (5)
     {"ticker": "XLF",     "data_start": "2010-01-01", "group": "sector"},
     {"ticker": "XLK",     "data_start": "2010-01-01", "group": "sector"},
     {"ticker": "XLE",     "data_start": "2010-01-01", "group": "sector"},
     {"ticker": "XLV",     "data_start": "2010-01-01", "group": "sector"},
     {"ticker": "XLI",     "data_start": "2010-01-01", "group": "sector"},
-    # International ETFs (5)
     {"ticker": "EWJ",     "data_start": "2010-01-01", "group": "international"},
     {"ticker": "EWZ",     "data_start": "2010-01-01", "group": "international"},
     {"ticker": "EEM",     "data_start": "2010-01-01", "group": "international"},
     {"ticker": "VEU",     "data_start": "2010-01-01", "group": "international"},
     {"ticker": "FXI",     "data_start": "2010-01-01", "group": "international"},
-    # Fixed income ETFs (5)
     {"ticker": "TLT",     "data_start": "2010-01-01", "group": "fixed_income"},
     {"ticker": "AGG",     "data_start": "2010-01-01", "group": "fixed_income"},
     {"ticker": "HYG",     "data_start": "2010-01-01", "group": "fixed_income"},
     {"ticker": "LQD",     "data_start": "2010-01-01", "group": "fixed_income"},
     {"ticker": "SHY",     "data_start": "2010-01-01", "group": "fixed_income"},
-    # Commodities / alternatives (5)
     {"ticker": "GLD",     "data_start": "2010-01-01", "group": "commodity"},
     {"ticker": "SLV",     "data_start": "2010-01-01", "group": "commodity"},
     {"ticker": "USO",     "data_start": "2010-01-01", "group": "commodity"},
     {"ticker": "GDX",     "data_start": "2010-01-01", "group": "commodity"},
     {"ticker": "DBC",     "data_start": "2010-01-01", "group": "commodity"},
-    # Crypto (2)
     {"ticker": "BTC-USD", "data_start": "2015-01-01", "group": "crypto"},
     {"ticker": "ETH-USD", "data_start": "2018-01-01", "group": "crypto"},
-    # Other (3)
     {"ticker": "INTC",    "data_start": "2010-01-01", "group": "us_equity"},
-    {"ticker": "ARKK",    "data_start": "2015-01-01", "group": "us_index"},   # inception Oct 2014
+    {"ticker": "ARKK",    "data_start": "2015-01-01", "group": "us_index"},   # inception Oct 2014 — no data before 2015
     {"ticker": "SMH",     "data_start": "2010-01-01", "group": "sector"},
 ]
 
 assert len(_BASE_ASSETS) == 50, f"Expected 50 base assets, got {len(_BASE_ASSETS)}"
 
-# ── 4 time-window variants ─────────────────────────────────────────────────
-# Each covers a distinct market regime; using multiple windows guards against
-# results being artefacts of any one period.
-#
-#  early  : pre-COVID bull market, low volatility regime
-#  std    : benchmark window — long train / long eval (used in prior experiments)
-#  covid  : COVID crash (Feb-Mar 2020), recovery, rate hikes begin 2022
-#  recent : short, recent eval — stress-tests whether gains hold post-2022
 _PERIOD_VARIANTS: list[dict[str, str]] = [
     {
         "label":      "early",
@@ -143,15 +97,6 @@ _PERIOD_VARIANTS: list[dict[str, str]] = [
     },
 ]
 
-# ── Detector toggle combinations ──────────────────────────────────────────
-# 2^4 = 16 combos of {KS, PSI, JS, PageHinkley} with PredictionDrift always on,
-# plus one explicit pure_static baseline (all adaptation disabled).
-#
-# Critically, SGD online learning and scheduled retraining are DISABLED for all
-# combos so the only source of adaptation is the drift-triggered batch retrain.
-# This makes the "all detectors off" combo a true no-adaptation baseline and
-# isolates the causal effect of each detector.  The pure_static combo is an
-# additional sanity-check baseline where even prediction drift is disabled.
 _DETECTOR_KEYS = ("use_ks", "use_psi", "use_js", "use_page_hinkley")
 _COMBOS: list[dict] = [
     dict(zip(_DETECTOR_KEYS, combo))
@@ -160,7 +105,7 @@ _COMBOS: list[dict] = [
 # 17th entry: pure static — no detection at all, no prediction drift either
 _COMBOS.append({
     "use_ks": False, "use_psi": False, "use_js": False, "use_page_hinkley": False,
-    "_pure_static": True,   # sentinel — picked up in _build_cfg
+    "_pure_static": True,   # sentinel — signals _build_cfg to disable prediction drift too
 })
 assert len(_COMBOS) == 17
 
@@ -178,22 +123,17 @@ def _combo_label(combo: dict) -> str:
 
 
 def _build_cfg(asset: dict[str, str], period: dict[str, str], combo: dict[str, bool]):
-    """
-    Return a RunConfig for (asset, period, combo), or None if the period is
-    invalid for this asset (data_start after train_end).
-    """
+    """Return a RunConfig for (asset, period, combo), or None if data_start > train_end."""
     from src.utils.cli import RunConfig
 
     data_start = asset["data_start"]
     ticker     = asset["ticker"]
     train_end  = period["train_end"]
 
-    # Skip if asset has no data before the training window ends
     if pd.Timestamp(data_start) > pd.Timestamp(train_end):
         return None
 
-    # data_end = max of eval_end or today (capped at 2024-12-31 for reproducibility)
-    data_end = "2024-12-31"
+    data_end = "2024-12-31"  # capped for reproducibility
 
     tag = f"{ticker.replace('-', '')}_{period['label']}_{_combo_label(combo)}"
 
@@ -225,9 +165,7 @@ def _build_cfg(asset: dict[str, str], period: dict[str, str], combo: dict[str, b
         use_js=combo["use_js"],
         use_prediction_drift=False if is_pure_static else True,
         use_page_hinkley=combo["use_page_hinkley"],
-        # Disable all three confounding adaptation sources for the detector ablation.
-        # Only drift-triggered batch retrain varies across combos — this is the
-        # clean experimental design required to isolate detector contribution.
+        # All non-detector adaptation disabled so only drift-triggered retrain varies across combos.
         use_sgd_online=False,
         use_scheduled_retrain=False,
         use_error_rate_trigger=False,
@@ -246,7 +184,7 @@ def build_jobs(log_dir: str = "results/ablation_logs") -> list[tuple]:
 
 
 def write_manifest(jobs: list[tuple], path: str = "results/ablation_manifest.csv") -> None:
-    """Save a human-readable manifest of every planned run."""
+    """Write a manifest CSV of every planned run."""
     rows = []
     for cfg, _ in jobs:
         rows.append({
@@ -286,21 +224,10 @@ def write_manifest(jobs: list[tuple], path: str = "results/ablation_manifest.csv
     print(f"Manifest written to {path}  ({len(df)} rows)", flush=True)
 
 
-# ── Data pre-fetch ─────────────────────────────────────────────────────────
-
 def _prefetch_all_data(jobs: list[tuple]) -> None:
-    """
-    Download and cache raw price data for every unique (ticker, data_start, data_end)
-    combination before the parallel pool starts.
-
-    Uses a single yfinance batch call per unique (data_start, data_end) group so
-    all tickers are fetched in one request — far less likely to trigger Yahoo Finance
-    rate limits than 35+ sequential or parallel calls.  Once the CSV is cached in
-    data/raw/, every worker uses the local file and never touches the network.
-    """
+    """Pre-fetch all ticker data sequentially to avoid Yahoo Finance rate-limits."""
     import yfinance as yf
 
-    # Collect unique (ticker, data_start, data_end, cache_path) that aren't cached yet
     seen: set[str] = set()
     to_fetch: list[tuple[str, str, str, str]] = []
 
@@ -322,7 +249,6 @@ def _prefetch_all_data(jobs: list[tuple]) -> None:
     os.makedirs("data/raw", exist_ok=True)
     print(f"Pre-fetch: batch-downloading {len(to_fetch)} ticker(s) in one request...", flush=True)
 
-    # Group by (data_start, data_end) so each group is one batch call
     from collections import defaultdict
     groups: dict[tuple, list] = defaultdict(list)
     for ticker, start, end, cache_name in to_fetch:
@@ -346,7 +272,7 @@ def _prefetch_all_data(jobs: list[tuple]) -> None:
         for ticker, cache_name in items:
             try:
                 if len(tickers) == 1:
-                    # Single-ticker download returns flat columns
+                    # single-ticker yfinance download returns flat (non-MultiIndex) columns
                     df = raw.copy()
                 else:
                     df = raw[ticker].copy() if ticker in raw.columns.get_level_values(0) else pd.DataFrame()
@@ -366,8 +292,6 @@ def _prefetch_all_data(jobs: list[tuple]) -> None:
 
     print(f"Pre-fetch complete: {total_ok} cached, {total_fail} failed.\n", flush=True)
 
-
-# ── Worker ─────────────────────────────────────────────────────────────────
 
 def _worker(args: tuple) -> dict[str, Any]:
     """Run one pipeline job; returns a summary dict (never raises)."""
@@ -408,8 +332,6 @@ def _worker(args: tuple) -> dict[str, Any]:
         sys.stderr = orig_stderr
 
 
-# ── Main entry ─────────────────────────────────────────────────────────────
-
 def run_ablation(
     n_workers: int | None = None,
     log_dir: str = "results/ablation_logs",
@@ -423,7 +345,6 @@ def run_ablation(
     if n_workers is None or n_workers == -1:
         n_workers = multiprocessing.cpu_count()
 
-    # Count valid (asset, period) pairs for reporting
     asset_period_pairs = len({(cfg.ticker_or_series, cfg.train_end) for cfg, _ in jobs})
 
     print(
@@ -451,8 +372,6 @@ def run_ablation(
     if manifest_only:
         return pd.DataFrame()
 
-    # Pre-fetch all ticker data sequentially to avoid Yahoo Finance rate-limits
-    # when N workers simultaneously request the same (or different) tickers.
     _prefetch_all_data(jobs)
 
     with multiprocessing.Pool(processes=n_workers) as pool:
@@ -472,7 +391,6 @@ def run_ablation(
     df = pd.DataFrame(results)
 
     if not df.empty:
-        # Attach group and period_label from run_tag where missing
         ticker_to_group = {a["ticker"]: a["group"] for a in _BASE_ASSETS}
         if "ticker" in df.columns and "group" not in df.columns:
             df["group"] = df["ticker"].map(ticker_to_group)
@@ -491,7 +409,6 @@ def run_ablation(
         err = (df["status"] == "error").sum()
         print(f"Completed: {ok} ok  |  {err} errors", flush=True)
 
-    # ── Per-combo aggregate (averaged over all assets + periods) ───────────
     combo_cols = ["use_ks", "use_psi", "use_js", "use_page_hinkley", "use_prediction_drift"]
     ok_df = df[df.get("status", pd.Series(dtype=str)) == "ok"] if "status" in df.columns else df
     if not ok_df.empty and all(c in ok_df.columns for c in combo_cols + ["acc_static", "acc_adaptive"]):
@@ -515,7 +432,6 @@ def run_ablation(
         print("\nMean metrics by detector combo (across all assets & periods):")
         print(combo_summary.to_string(index=False))
 
-    # ── Per-asset aggregate (averaged over combos) ─────────────────────────
     if not ok_df.empty and "ticker" in ok_df.columns:
         agg_cols2 = [c for c in [
             "acc_static", "acc_adaptive", "acc_delta",

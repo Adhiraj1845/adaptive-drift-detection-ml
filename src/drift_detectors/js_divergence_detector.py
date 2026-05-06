@@ -2,24 +2,7 @@ import numpy as np
 
 
 class JSDivergenceDetector:
-    """Jensen-Shannon divergence drift detector.
-
-    Symmetrised, smoothed version of KL divergence bounded in [0, ln(2)]:
-        JSD(P||Q) = 0.5 * KL(P||M) + 0.5 * KL(Q||M),  M = 0.5*(P+Q)
-
-    Bin edges span the combined reference+current range so that
-    non-overlapping distributions score near ln(2) ≈ 0.693.
-    Normalise to [0, 1] by dividing by ln(2) for use as a drift score.
-
-    Unlike KL divergence, JSD is symmetric and always finite — useful
-    for detecting correlation-regime shifts where marginals are stable
-    but joint distributions change (e.g., equity-bond correlation inversion).
-
-    Parameters
-    ----------
-    bins : int
-        Number of histogram bins. Default 20.
-    """
+    """Jensen-Shannon divergence drift detector; bounded in [0, ln(2)]."""
 
     def __init__(self, bins: int = 20):
         self.bins = bins

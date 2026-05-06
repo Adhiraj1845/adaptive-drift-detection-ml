@@ -1,13 +1,9 @@
-# src/model/train_model.py
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import numpy as np
 
 def add_features(df):
-    """
-    Add features using Close price only.
-    """
     if 'Close' not in df.columns:
         raise KeyError(f"'Close' column not found. Columns: {df.columns.tolist()}")
 

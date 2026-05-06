@@ -1,4 +1,3 @@
-# src/utils/cli.py
 from __future__ import annotations
 
 import os
@@ -42,19 +41,17 @@ def _section(title: str, step: Optional[str] = None) -> None:
 
 @dataclass(frozen=True)
 class RunConfig:
-    # data
-    source: str                   # "yahoo", "csv", "fred"
+    source: str
     ticker_or_series: str
     csv_path: Optional[str]
     date_col: Optional[str]
-    schema_mode: str              # "auto", "ohlcv", "value"
+    schema_mode: str
     close_col: Optional[str]
     open_col: Optional[str]
     high_col: Optional[str]
     low_col: Optional[str]
     volume_col: Optional[str]
 
-    # periods
     data_start: str
     data_end: str
     train_start: str
@@ -62,27 +59,22 @@ class RunConfig:
     eval_start: str
     eval_end: str
 
-    # adaptation
     retrain_lookback_years: int
     min_retrain_rows: int
 
-    # model
-    model_name: str               # "random_forest", "logistic_regression", "gradient_boosting"
+    model_name: str
 
-    # outputs
     run_tag: str
 
-    # detector toggles (default all on for backwards-compat)
     use_ks: bool = True
     use_psi: bool = True
     use_js: bool = True
     use_prediction_drift: bool = True
     use_page_hinkley: bool = True
 
-    # adaptation mechanism toggles
-    use_sgd_online: bool = True          # daily SGD partial_fit updates
-    use_scheduled_retrain: bool = True   # periodic batch retrain every 10 days
-    use_error_rate_trigger: bool = True  # retrain when static acc drops below 0.45
+    use_sgd_online: bool = True
+    use_scheduled_retrain: bool = True
+    use_error_rate_trigger: bool = True
 
 
 def _ask(label: str, default: Optional[str] = None, hint: str = "") -> str:

@@ -4,28 +4,7 @@ from typing import Sequence, List, Optional
 
 
 class PSIDetector:
-    """Population Stability Index drift detector.
-
-    Measures distributional shift between a reference and current window:
-        PSI = sum_i (A_i - E_i) * ln(A_i / E_i)
-
-    where E_i and A_i are the reference and current bin proportions.
-    Bins are defined by quantiles of the reference distribution.
-
-    Industry interpretation (Basel II credit risk governance):
-        PSI < 0.10  — negligible shift
-        PSI < 0.25  — moderate shift (monitoring recommended)
-        PSI >= 0.25 — significant shift (model review required)
-
-    Parameters
-    ----------
-    threshold : float
-        Detection threshold on PSI. Default 0.2.
-    num_bins : int
-        Number of quantile bins. Default 10.
-    epsilon : float
-        Smoothing constant to avoid log(0). Default 1e-6.
-    """
+    """Population Stability Index drift detector; epsilon smoothing prevents log(0)."""
 
     def __init__(self, threshold: float = 0.2, num_bins: int = 10, epsilon: float = 1e-6):
         self.threshold = float(threshold)

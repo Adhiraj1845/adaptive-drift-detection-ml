@@ -1,32 +1,4 @@
-"""
-Sharpe decomposition: drift detection vs position sizing.
-
-Separates the Sharpe improvement into two components:
-  1. Prediction quality gain  — from better adaptive predictions (flat 0.5 position)
-  2. Position sizing gain     — from conviction-weighted position scaling
-
-Uses existing daily_monitoring_*.csv files — no re-runs needed.
-
-Method: for each run, recompute equity curves using three position strategies:
-  A. Flat 0.5 (static)   — static predictions, fixed half-position
-  B. Flat 0.5 (adaptive) — adaptive predictions, fixed half-position
-  C. Conviction (static) — original static equity (from main.py)
-  D. Conviction (adaptive)— original adaptive equity (from main.py)
-
-Sharpe(B) - Sharpe(A) = prediction quality gain (pure information)
-Sharpe(D) - Sharpe(B) = position sizing gain (from conviction scaling)
-Sharpe(D) - Sharpe(A) = total gain (matches existing sharpe_delta approximately)
-
-Output
-------
-  results/sharpe_decomposition.csv    — per-run decomposition
-  results/sharpe_decomposition.png    — attribution bar chart
-
-Usage
------
-    python -m src.experiments.sharpe_decomposition
-    python -m src.experiments.sharpe_decomposition --combo all
-"""
+"""Sharpe decomposition: separates prediction quality gain from position-sizing gain."""
 from __future__ import annotations
 
 import argparse

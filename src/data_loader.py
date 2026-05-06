@@ -1,4 +1,3 @@
-# src/data_loader.py
 import os
 from dataclasses import dataclass
 from typing import List, Optional
@@ -105,7 +104,6 @@ def add_features(
 
     out = df.copy().sort_index()
 
-    # Rename columns to standard names based on schema
     if schema is not None:
         rename = {}
         for src, dst in [
@@ -129,20 +127,17 @@ def add_features(
             raise KeyError("add_features requires at least a 'Close' column.")
         out["Close"] = pd.to_numeric(out["Close"], errors="coerce")
 
-    # Returns and target
     out["Return"] = out["Close"].pct_change(fill_method=None)
     close_safe = out["Close"].where(out["Close"] > 0, np.nan)
     out["LogReturn"] = np.log(close_safe).diff()
     out["NextReturn"] = out["Return"].shift(-1)
     out["Target"] = (out["NextReturn"] > 0).astype(int)
 
-    # OHLCV-only features
     if has_ohlcv:
         out["HL_Range"] = _safe_div(out["High"] - out["Low"], out["Close"])
         out["CO_Return"] = _safe_div(out["Close"] - out["Open"], out["Open"])
         out["Vol_Change"] = out["Volume"].pct_change(fill_method=None)
 
-    # Rolling features
     for w in feature_windows:
         w = int(w)
         if w <= 1:
@@ -162,7 +157,6 @@ def add_features(
         roll_max = out["Close"].rolling(w).max()
         out[f"DD_{w}"] = _safe_div(out["Close"], roll_max) - 1.0
 
-    # Trend regime features — price relative to moving averages.
     for ma_w in [20, 60]:
         ma  = out["Close"].rolling(ma_w).mean()
         std = out["Close"].rolling(ma_w).std().replace(0.0, np.nan)

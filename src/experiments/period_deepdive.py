@@ -1,27 +1,4 @@
-"""
-Period deep-dive: why does acc_delta trend negative in 2023-24?
-
-Diagnoses the recent-period performance degradation by:
-  1. Per-year acc_delta time series (2016-2024)
-  2. Drift alarm frequency per year (are we over-triggering?)
-  3. Retrain count per year
-  4. Prediction entropy (are adaptive predictions becoming less confident?)
-  5. Static model stability in post-pandemic normalisation phase
-
-Hypothesis: 2023-24 bull market with low volatility and mean-reversion
-reduces the drift detector's signal (regime is stable), but the adaptive
-model accumulated many retrains from 2020-22, leaving it over-fitted to
-volatile regimes. This is the "volatility regime persistence" problem.
-
-Output
-------
-  results/period_deepdive.csv           -- per-year aggregate stats
-  results/period_deepdive_charts.png    -- 4-panel time-series charts
-
-Usage
------
-    python -m src.experiments.period_deepdive
-"""
+"""Per-year acc_delta breakdown to diagnose performance variation across calendar years."""
 from __future__ import annotations
 
 import sys

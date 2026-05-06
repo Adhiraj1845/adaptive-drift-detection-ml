@@ -1,33 +1,4 @@
-"""
-Financial strategy baselines comparison.
-
-Compares the adaptive framework against three standard financial baselines:
-  1. Buy-and-hold     — always long 100% (market return)
-  2. SMA crossover    — long when 20-day SMA > 50-day SMA, else flat
-  3. Momentum         — long when trailing 20-day return > 0, else flat
-  4. Static framework — our static model with conviction sizing (benchmark)
-  5. Adaptive framework — our full adaptive pipeline (evaluated)
-
-This provides the external anchor required by the marking rubric:
-"Results clearly related to aim and motivation/goals as appropriate."
-
-Without comparing to standard strategies, the Sharpe improvements are
-uncontextualised. Finance examiners expect these baselines.
-
-Also computes:
-  - Alpha vs buy-and-hold (excess return)
-  - Beta (market exposure)
-  - Treynor ratio = (annualised return - rf) / beta
-  - Maximum drawdown comparison
-
-Output
-------
-  results/financial_baselines.csv       -- per-run baseline comparison
-  results/financial_baselines_charts.png -- 4-panel comparison
-
-Usage
------
-    python -m src.experiments.financial_baselines
+"""Financial strategy baselines: buy-and-hold, SMA crossover, momentum, static ML, adaptive ML."""
 """
 from __future__ import annotations
 

@@ -1,0 +1,211 @@
+% ============================================================
+%  chapters/chapter1.tex
+%  Introduction and Background Research
+%  COMP3931 Individual Project  Adhiraj Kumar  2025/26
+% ============================================================
+
+\chapter{Introduction and Background Research}
+\label{ch:introduction}
+
+% -----------------------------------------------------------
+\section{Introduction}
+\label{sec:introduction}
+% -----------------------------------------------------------
+
+A predictive model assumes that the future will resemble the past. This is called stationarity. That assumption is reasonable in most supervised learning settings but not in financial markets. Conditions alternate between qualitatively different regimes: bull markets, recessions, inflation cycles, liquidity crises. Each produces a different relationship between observable features and the direction of the next trading day's return. A model calibrated on one regime does not simply lose accuracy in another. It becomes wrong in a way it cannot itself detect. This failure of stationarity is known as \emph{concept drift}~\cite{widmer1996,gama2014survey}.
+
+The problem this project addresses is not whether drift exists. The evidence on that is clear. The question is whether drift can be detected early enough to make a difference. Can a model identify that its training distribution has shifted before prediction quality has degraded? And if it can, can it trigger a proportionate response rather than waiting for accuracy to collapse? The framework developed here tests this hypothesis concretely. It monitors the model's rolling prediction loss via a Page Hinkley sequential change point detector and asks whether three supplementary feature distribution detectors (KS, PSI, JS) provide a warning even earlier. A tiered controller triggers one of four retraining responses scaled to severity when a distributional shift is identified.
+
+The empirical findings, reported in Chapter~4, confirm that the early warning hypothesis partially holds. Feature distribution alarms fire approximately 11 days before accuracy deterioration becomes observable, and adaptive retraining based on those alarms produces statistically significant improvements in both directional accuracy and risk adjusted returns. But the findings also confirm the limits of this approach. The Page Hinkley performance monitor alone is the minimum sufficient configuration. Why feature detectors add no lead time is a central analytical result: covariate shift in financial returns rarely precedes the model's loss degradation by more than a few days, and the Page Hinkley monitor's cumulative sum formulation catches persistent shifts almost as quickly. The full feature distribution stack adds no accuracy improvement over Page Hinkley alone. The framework fails during the 2022 Federal Reserve tightening cycle due to an architectural ceiling in batch retraining. The probability calibration degrades as a consequence of the calibration discrimination trade off, a structural feature of the retraining mechanism that is explained in full in Chapter~2.
+
+The rest of this chapter builds the theoretical foundation for those findings. Section~\ref{sec:nonstationarity} establishes the empirical evidence that financial markets are non stationary. Section~\ref{sec:drift_taxonomy} gives the formal taxonomy of drift types, covering covariate shift, concept drift, and prior probability shift, and explains why this taxonomy motivates a multi layer detection stack rather than a single signal. Section~\ref{sec:detection_methods} surveys existing detection methods and explains why each of the four selected detectors is included and why the alternatives are rejected. Section~\ref{sec:adaptive_learning} reviews the adaptive learning literature that constrains the update strategy. Section~\ref{sec:ml_finance} surveys the financial machine learning evidence that informs model selection and identifies the calibration discrimination trade off as a first class constraint. The three research questions and contributions are stated in Section~\ref{sec:rqs}.
+
+% -----------------------------------------------------------
+\section{Non Stationarity in Financial Time Series}
+\label{sec:nonstationarity}
+% -----------------------------------------------------------
+
+\subsection{Evidence for Regime Changes}
+
+The assumption that the joint distribution $P(\mathbf{x}_t, y_{t+1})$ is stationary is foundational to most supervised learning frameworks. It is empirically untenable in financial time series. Three strands of evidence establish this directly.
+
+The first is structural. Hamilton~\cite{hamilton1989} modelled the business cycle as a two state hidden Markov chain, estimating mean regime durations of 10 to 12 months for expansionary periods and 4 to 6 months for contractionary periods. These are persistent structural shifts, not continuous Gaussian variation. The implication for a predictive model is direct: any training window longer than roughly four months risks spanning two qualitatively different data generating processes.
+
+The second strand is cross asset. Ang and Timmermann~\cite{ang2012regime} showed that equity bond correlations switch sign between regimes. This became directly observable in the 2022 Federal Reserve tightening cycle, where both asset classes sold off simultaneously, breaking a decade long correlation pattern. A static model trained before 2022 would have learnt the wrong joint distribution for the period that followed.
+
+The third strand is volatility driven. Autoregressive Conditional Heteroskedasticity dynamics, known as ARCH and GARCH, describe how large price moves cluster in time: high volatility tends to be followed by more high volatility, and calm periods by more calm~\cite{engle1982,bollerslev1986}. These models imply that high volatility periods cluster across asset classes, so a model trained during a calm regime will encounter a categorically different input distribution during a volatility spike. The rolling KS statistic for four representative instruments (AAPL, SPY, GLD, BTC USD) over 2016 to 2024 in Figure~\ref{fig:nonstat_appendix} (Appendix~B) confirms that sustained elevations coincide precisely with the COVID 19 dislocation, the 2022 Federal Reserve hiking cycle, the Silicon Valley Bank collapse, and a 2021 cryptocurrency regime shift.
+
+Taken together, these three strands establish that distributional shift in financial time series is not a rare edge case. It is a recurring, temporally clustered phenomenon that any deployed model will encounter.
+
+\subsection{The Adaptive Markets Hypothesis}
+
+The standard theoretical response to this evidence is the Efficient Markets Hypothesis (EMH)~\cite{fama1970}. In its weak form, the EMH asserts that all historical price information is already incorporated into current prices. If the EMH held strictly, no model trained on historical features could predict future returns, and the premise of this project would be false right from the beginning.
+
+Lo's Adaptive Markets Hypothesis (AMH)~\cite{lo2004amh} provides a more empirically consistent account. The AMH treats market participants as adaptive agents who learn from experience, so the degree of market efficiency varies over time and across regimes. Predictable patterns emerge when conditions change faster than participants can adapt, and disappear once adaptation catches up. The challenge is therefore not whether predictability exists, but detecting when the distribution has shifted and adapting before the market reaches its new equilibrium. The AMH is what makes the early warning problem tractable: if detection is fast enough, the adaptive model can exploit the post shift window before equilibrium is restored.
+
+% -----------------------------------------------------------
+\section{Concept Drift: Taxonomy and Formal Definitions}
+\label{sec:drift_taxonomy}
+% -----------------------------------------------------------
+
+Knowing that financial distributions shift is a necessary motivation for this project, but not a wholly sufficient one. It is necessary to be precise about what shifts to design a detection stack. Different types of distributional change require different detection signals, and no single detector covers them all.
+
+\subsection{Formal Definitions}
+
+Let $P_t(\mathbf{x}, y)$ denote the joint distribution of feature vector $\mathbf{x}_t \in \mathbb{R}^d$ and binary target $y_t \in \{0,1\}$ at time $t$. Concept drift in its general form is any change in this joint distribution:
+
+\begin{equation}
+  \exists\, t_1 < t_2 : P_{t_1}(\mathbf{x}, y) \neq P_{t_2}(\mathbf{x}, y)
+  \label{eq:drift_general}
+\end{equation}
+
+Gama et al.~\cite{gama2014survey} decompose this into three distinct types based on which marginal or conditional distribution has shifted. The decomposition matters because it determines what signal a detector needs to monitor.
+
+\paragraph{Covariate shift} occurs when the marginal distribution of input features changes, but the predictive relationship between features and the target remains approximately stable:
+
+\begin{equation}
+  P_{t_1}(\mathbf{x}) \neq P_{t_2}(\mathbf{x}), \quad
+  P_{t_1}(y \mid \mathbf{x}) \approx P_{t_2}(y \mid \mathbf{x})
+  \label{eq:covariate_shift}
+\end{equation}
+
+In financial data, this is what happens at the onset of a volatility regime change. Feature distributions shift substantially before the predictive relationship has changed. A model experiencing covariate shift receives out of distribution inputs but is not yet systematically wrong. Error based detectors will not catch it at this stage. Distribution based detectors can.
+
+\paragraph{Concept drift} (in the strict sense) occurs when the predictive relationship itself changes:
+
+\begin{equation}
+  P_{t_1}(y \mid \mathbf{x}) \neq P_{t_2}(y \mid \mathbf{x})
+  \label{eq:concept_drift}
+\end{equation}
+
+This is the most damaging form because it directly invalidates the learnt mapping. In financial markets it accompanies structural breaks such as a central bank policy reversal, where the same features that predicted an up day now predict a down day.
+
+\paragraph{Prior probability shift} occurs when the underlying proportion of up days versus down days changes, while the features that distinguish the two classes remain structurally similar:
+
+\begin{equation}
+  P_{t_1}(y) \neq P_{t_2}(y), \quad
+  P_{t_1}(\mathbf{x} \mid y) \approx P_{t_2}(\mathbf{x} \mid y)
+  \label{eq:label_shift}
+\end{equation}
+
+In practice the three types co occur. The 2022 Federal Reserve tightening produced simultaneous shifts in feature distributions, the feature label relationship, and the proportion of up days. This exposes the taxonomy's tripartite separation as a modelling convenience rather than an empirical reality. What matters for design is the key implication established by Widmer and Kubat~\cite{widmer1996}: no single error based detector can resolve which component has shifted, because covariate shift is invisible to any detector that only watches the error stream. This is the direct motivation for a multi layer stack rather than a single detector. Yet as Chapter~4 shows, the additional detectors prove redundant in practice: the Page Hinkley monitor's sensitivity to persistent loss increases catches the shift almost as early as any feature distribution alarm, because financial covariate shifts are rarely pure and almost always accompanied by small but cumulative prediction errors.
+
+% -----------------------------------------------------------
+\section{Drift Detection Methods}
+\label{sec:detection_methods}
+% -----------------------------------------------------------
+
+\subsection{Categories of Drift Detector}
+
+Drift detectors partition into three categories based on what they monitor. The choice is not primarily a performance question. It is a question of what information is available at detection time.
+
+\paragraph{Error based detectors} monitor the model's prediction error stream. They carry two critical limitations for this setting. First, the true label $y_{t+1}$ must be available to compute per step error, making them inapplicable when labels arrive with a one day lag. Second, they are blind to covariate shift that has not yet propagated to the error stream. Given that covariate shift precedes error degradation by a mean of 11.1 days (Chapter~4), this is not a minor limitation.
+
+\paragraph{Distribution based detectors} monitor the statistical properties of the input feature distribution without requiring labels, enabling detection before accuracy degrades. Their limitation is that a shift in $P(\mathbf{x})$ does not guarantee a change in $P(y \mid \mathbf{x})$. This is addressed by asset adaptive calibration, described in Chapter~2, Section~\ref{subsec:param_calibration}.
+
+\paragraph{Model based detectors} monitor output behaviour rather than inputs. The prediction drift monitor applied here uses JS divergence on the output probability distribution. This covers cases where the model's confidence profile changes without a corresponding shift in the marginal feature distributions.
+
+\subsection{Principal Detection Methods: Survey and Critique}
+
+Rabanser et al.~\cite{rabanser2019} systematically compare ten methods on tabular data, finding that PSI class statistics achieve near identical detection power to KS at $\mathcal{O}(n)$ versus $\mathcal{O}(n \log n)$ cost, and that the KS test retains value only for tail sensitivity. The four selected methods (KS, PSI, JS, and Page Hinkley) are described in detail in Chapter~2, Section~\ref{sec:detector_rationale}. Their properties are summarised in Table~\ref{tab:detector_comparison} below.
+
+\paragraph{ADWIN.}
+ADWIN~\cite{bifet2007adwin} uses a Hoeffding bound test on a variable length window but requires the true label, making it inapplicable under a one day lag. It is also blind to covariate shift in $P(\mathbf{x})$. The synthetic benchmark in Chapter~3 confirms the consequence: ADWIN achieves 0.2\% TPR on feature drift tasks where PSI+PH achieves 93 to 100\%.
+
+\paragraph{DDM, EDDM, and Kifer et al.}
+DDM~\cite{gama2004ddm} and EDDM~\cite{baenagarcia2006eddm} share ADWIN's label dependency and covariate shift blindness~\cite{nishida2007}. Kifer et al.~\cite{kifer2004} generalise KS and PSI under a common divergence framework, but Rabanser et al.~\cite{rabanser2019} show that PSI class methods already achieve near optimal sensitivity on OHLCV type tabular drift, leaving no motivation for the added configuration overhead here.
+
+\subsection{Comparative Analysis}
+
+Table~\ref{tab:detector_comparison} summarises the principal methods along the four dimensions most relevant to the deployment constraints established in Chapter~2.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Comparative analysis of drift detection methods. "Requires labels"
+    indicates whether the true target $y_{t+1}$ must be available at detection time.
+    "Bounded" indicates whether the statistic has a natural $[0,1]$ or otherwise
+    finite range facilitating aggregation. PH is the primary (minimum sufficient)
+    detector; KS, PSI, and JS are supplementary probes testing the lead time
+    hypothesis (Chapter~2, Section~\ref{sec:detector_rationale}).}
+  \label{tab:detector_comparison}
+  \begin{tabular}{lccccl}
+    \hline
+    \textbf{Method} & \textbf{Type} & \textbf{Requires}
+      & \textbf{Bounded} & \textbf{Complexity}
+      & \textbf{Role} \\
+    & & \textbf{labels} & & & \\
+    \hline
+    Page Hinkley     & Performance  & No  & No (unbounded)    & $\mathcal{O}(1)$       & Primary \\
+    KS test          & Distribution & No  & Yes $[0,1]$       & $\mathcal{O}(n\log n)$ & Supplementary \\
+    PSI              & Distribution & No  & No (but practical & $\mathcal{O}(n)$       & Supplementary \\
+                     &              &     & thresholds exist) & & \\
+    JS divergence    & Distribution & No  & Yes $[0,\ln 2]$   & $\mathcal{O}(n)$       & Supplementary \\
+    ADWIN            & Error based  & Yes & No                & $\mathcal{O}(\log n)$  & Rejected \\
+    DDM / EDDM       & Error based  & Yes & No                & $\mathcal{O}(1)$       & Rejected \\
+    Kifer et al.     & Distribution & No  & Depends on        & $\mathcal{O}(n)$       & Rejected \\
+                     &              &     & divergence used   & & \\
+    \hline
+  \end{tabular}
+\end{table}
+
+The key asymmetry in the table is between the first four rows and the last three. The selected detectors require no labels and cover covariate shift, concept drift, and prior probability shift between them. The rejected detectors either need labels (ADWIN, DDM, EDDM), failing requirement~1, or add overhead over PSI class methods with no sensitivity gain (Kifer et al.). The acknowledged limitations of the selected stack are acceptable given that financial regimes span weeks to months~\cite{hamilton1989}. PSI is bin count sensitive. KS is $\mathcal{O}(n\log n)$. PH detects only persistent shifts~\cite{page1954}. These are quantified directly in the synthetic benchmark of Chapter~3.
+
+% -----------------------------------------------------------
+\section{Adaptive Learning Under Drift}
+\label{sec:adaptive_learning}
+% -----------------------------------------------------------
+
+Detecting drift is only half the problem. Once an alarm fires, the model must update in a way that is responsive to the shift without discarding everything it has learnt. The adaptation literature constrains this choice in three ways.
+
+Klinkenberg and Joachims~\cite{klinkenberg2000} show that sliding window retraining is effective but that the optimal window size varies with drift type. The right window for an abrupt shock is not the right window for a gradual tightening cycle. This motivates asset adaptive calibration of the window and threshold parameters rather than a fixed global setting.
+
+Herbster and Warmuth~\cite{herbster1998} establish that a blended learner achieves regret $\mathcal{O}(\sqrt{T \ln N})$, where $T$ is the number of time steps and $N$ is the number of experts in the blend. This bound suggests retaining prior model parameters rather than replacing them fully at each update, a soft update that sits closer to the stable end of the stability plasticity spectrum. The specific blend weight $\gamma = 0.15$ is justified in Chapter~2, Section~\ref{subsec:param_gamma}. Losing et al.~\cite{losing2018} provide empirical confirmation that blended approaches outperform both static and full retrain strategies under gradual drift.
+
+Dynamic ensemble methods such as DWM~\cite{kolter2007dwm}, ARF~\cite{gomes2017arf}, and DDD~\cite{minku2012ddd} adapt continuously through ensemble diversity rather than discrete retrain triggers, and represent a credible alternative in principle. They are excluded here on two independent grounds. First, using dynamic ensembles in both the adaptive and static arms would confound the detection effect, making it impossible to attribute any measured improvement to the detection mechanism rather than the ensemble architecture. Second, ARF and DDD require a continuous observation stream that is inconsistent with the 400 row minimum training window required for reliable calibration on sparse regime change events.
+
+% -----------------------------------------------------------
+\section{Machine Learning in Financial Prediction}
+\label{sec:ml_finance}
+% -----------------------------------------------------------
+
+Two modelling decisions are open at this point. Firstly, which base classifier to use, and whether the task is feasible at all. Both are addressed by the financial machine learning literature.
+
+Gu et al.~\cite{gu2020} and Krauss et al.~\cite{krauss2017} establish Random Forest and Gradient Boosted Machine as the best performing classifiers for next day equity return direction, which is the same task used here. Volatility and momentum features are most persistently informative across market conditions. Both studies also note that predictive performance is itself non stationary. The Fama French factor literature~\cite{fama1993} shows that momentum and volatility premia flip sign during structural breaks, which is precisely why a richer static feature set alone cannot solve the problem. Rapach and Zhou~\cite{rapach2013} frame the core challenge concisely: signals exist but are time varying, so the task is detecting when they have stopped working.
+
+One further implication follows from DeGroot and Fienberg~\cite{degroot1983} and constrains the entire adaptation strategy. Retraining a classifier on new data shifts its decision boundary in a way that can improve directional accuracy while simultaneously degrading probability calibration, because the boundary moves without a corresponding recalibration step. This calibration discrimination trade off is not a bug in the implementation. It is a structural consequence of the adaptation mechanism, and it is documented as a limitation in Chapter~4, Section~\ref{sec:limitations}.
+
+% -----------------------------------------------------------
+\section{Research Questions and Contributions}
+\label{sec:rqs}
+% -----------------------------------------------------------
+
+\subsection{Research Questions}
+
+The literature reviewed above converges on a specific gap. Non stationary financial markets (Section~\ref{sec:nonstationarity}) demand detection before accuracy degrades. The drift taxonomy (Section~\ref{sec:drift_taxonomy}) shows that covariate shift is invisible to error based detectors. The adaptation literature (Section~\ref{sec:adaptive_learning}) constrains the update to a blended strategy with asset adaptive parameters. The financial machine learning evidence (Section~\ref{sec:ml_finance}) confirms the base classifier choices and flags the calibration discrimination trade off as unavoidable. No existing study integrates all four constraints into a single validated framework. Three research questions operationalise this gap:
+
+\begin{enumerate}
+  \item \textbf{RQ1: Do distribution based detectors identify genuine market regime
+    changes?} Does the detector stack produce alarms that correspond to dated market
+    events in the literature, and is adaptive accuracy improvement concentrated in
+    alarm active periods?
+
+  \item \textbf{RQ2: Does adaptive retraining improve prediction quality?} Does the
+    improvement hold across 50 instruments and four market sub periods, and is it
+    statistically robust and economically meaningful after transaction costs?
+
+  \item \textbf{RQ3: What is the minimum sufficient detector configuration?} Is the
+    full four detector stack necessary, or does a smaller subset achieve equivalent
+    performance at lower computational cost?
+\end{enumerate}
+
+\subsection{Contributions}
+
+This project makes three contributions.
+
+The primary contribution is a validated adaptive drift detection framework for financial binary classification that combines label free detection, asset adaptive calibration, and a tiered retraining controller. Prior detection focused work~\cite{rabanser2019,bifet2007adwin} evaluates detectors in isolation. Prior financial machine learning work~\cite{gu2020,krauss2017} acknowledges non stationarity without providing a systematic detection and adaptation mechanism. The synthetic benchmark in Chapter~3 and the 50 instrument, ten year evaluation in Chapter~4 address both gaps.
+
+The second contribution is the composite drift index: a Page Hinkley performance monitor as the minimum sufficient detector, supplemented by three feature distribution signals (KS, PSI, JS) that test whether upstream monitoring provides earlier warning. The ablation result shows the hypothesis is rejected. PH alone is Pareto optimal. But the index with asset adaptive calibration generalises to any setting where fixed global thresholds are inappropriate.
+
+The third contribution is a fully reproducible implementation: 121 tests, 23 experiment scripts with committed results, and a real time monitoring dashboard, all version controlled and publicly available.
+
+Chapter~2 now takes these theoretical foundations and turns them into concrete, justified design decisions.

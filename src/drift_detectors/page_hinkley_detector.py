@@ -12,27 +12,7 @@ class PageHinkleyState:
 
 
 class PageHinkleyDetector:
-    """Page-Hinkley sequential change-point detector (Page, 1954).
-
-    Accumulates deviations of an observed signal from its running mean.
-    Triggers when the cumulative sum exceeds a threshold:
-        M_t = sum_{i=1}^{t} (x_i - mean_t - delta)
-        PH_t = M_t - min_{i<=t}(M_i)   (upward shift)
-        PH_t = max_{i<=t}(M_i) - M_t   (downward shift)
-
-    Operates in O(1) time and O(1) space per update — the most
-    computationally efficient detector in the ensemble.
-    Applied to prediction error rate to detect performance drift.
-
-    Parameters
-    ----------
-    threshold : float
-        Detection threshold on the PH statistic. Default 50.0.
-    delta : float
-        Allowable slack (magnitude of acceptable change). Default 0.0.
-    direction : str
-        One of 'increase', 'decrease', or 'both'. Default 'increase'.
-    """
+    """Page-Hinkley sequential change-point detector (Page, 1954); O(1) time and space per update."""
 
     def __init__(self, threshold: float = 50.0, delta: float = 0.0, direction: str = "increase"):
         self.threshold = float(threshold)
@@ -50,15 +30,15 @@ class PageHinkleyDetector:
     def update(self, x: float) -> bool:
         s = self.state
         s.t += 1
-        s.mean += (x - s.mean) / s.t  # online mean
+        s.mean += (x - s.mean) / s.t
         s.m_t += (x - s.mean - self.delta)
         if s.m_t < s.m_min:
             s.m_min = s.m_t
         if s.m_t > s.m_max:
             s.m_max = s.m_t
 
-        stat_inc = s.m_t - s.m_min  # upward evidence
-        stat_dec = s.m_max - s.m_t  # downward evidence
+        stat_inc = s.m_t - s.m_min
+        stat_dec = s.m_max - s.m_t
 
         if self.direction == "increase":
             drift = stat_inc > self.threshold

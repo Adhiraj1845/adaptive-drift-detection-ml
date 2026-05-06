@@ -1,17 +1,4 @@
-"""
-Market event alignment analysis.
-
-For each known macro event, counts how many drift alarms fired within ±N days
-across all daily_monitoring CSVs.  Produces:
-  - results/market_event_proximity.csv   — per-event alarm count + proximity stats
-  - results/market_event_timeline.png    — drift-index timeline with event markers
-  - results/market_event_heatmap.png     — event × asset heatmap of alarm proximity
-
-Usage
------
-    python -m src.experiments.market_event_analysis
-    python -m src.experiments.market_event_analysis --window 10 --combo all
-"""
+"""Market event alignment: drift alarm counts within ±N days of known macro events."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +13,6 @@ _root = Path(__file__).resolve().parents[2]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-# ── Known macro events ─────────────────────────────────────────────────────────
 _EVENTS: list[dict] = [
     {"label": "COVID crash start",      "date": "2020-02-20", "color": "#d7191c"},
     {"label": "COVID bottom",           "date": "2020-03-23", "color": "#d7191c"},
@@ -45,7 +31,6 @@ _PROXIMITY_WINDOW = 15  # ±15 trading days
 
 
 def _find_monitoring_files(results_dir: str, combo_filter: str | None) -> list[Path]:
-    """Return all daily_monitoring_*.csv files, optionally filtered by combo tag."""
     paths = list(Path(results_dir).glob("daily_monitoring_*.csv"))
     if combo_filter:
         paths = [p for p in paths if f"_{combo_filter}.csv" in p.name or p.name.endswith(f"_{combo_filter}.csv")]
@@ -53,7 +38,6 @@ def _find_monitoring_files(results_dir: str, combo_filter: str | None) -> list[P
 
 
 def _parse_ticker_period(stem: str) -> tuple[str, str]:
-    """Extract (ticker, period) from stem like daily_monitoring_AAPL_covid_all."""
     parts = stem.replace("daily_monitoring_", "").split("_")
     if len(parts) >= 2:
         return parts[0], parts[1]

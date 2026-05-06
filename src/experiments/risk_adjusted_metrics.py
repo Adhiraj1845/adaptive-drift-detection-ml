@@ -1,30 +1,4 @@
-"""
-Risk-adjusted metrics analysis.
-
-Addresses the MaxDD critique: adaptive has 4x worse max drawdown
-(−31.7% vs −7.7%). This script computes proper risk-adjusted alternatives:
-
-  Sortino ratio   = annualised return / downside deviation (semi-std, negatives only)
-  Calmar ratio    = annualised CAGR / |max drawdown|
-  Information ratio = (adaptive_ret - static_ret) / tracking_error
-  Downside capture  = adaptive loss in down markets / static loss in down markets
-  Upside capture    = adaptive gain in up markets / static gain in up markets
-
-Key hypothesis: while MaxDD is worse, Sortino may be comparable or better
-because adaptive makes larger positions when it has conviction — those
-larger positions also produce larger gains, which the Sortino numerator captures.
-
-Also computes Value-at-Risk (95% VaR) and Conditional VaR (CVaR / Expected Shortfall).
-
-Output
-------
-  results/risk_adjusted.csv             -- per-run risk metrics
-  results/risk_adjusted_charts.png      -- 4-panel charts
-
-Usage
------
-    python -m src.experiments.risk_adjusted_metrics
-"""
+"""Risk-adjusted metrics: Sortino, Calmar, IR, CVaR, and MaxDD for adaptive vs static."""
 from __future__ import annotations
 
 import sys

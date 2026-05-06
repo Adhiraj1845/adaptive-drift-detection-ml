@@ -1,27 +1,4 @@
-"""
-Detector lead-time analysis: KS+PSI vs PH alarm timing.
-
-For each matched (ticker, period) pair, compares when the KS+PSI-only
-configuration first raises an alarm vs when the PH-only configuration
-first raises an alarm.
-
-lead_time = t_first_alarm(KS+PSI) - t_first_alarm(PH), in trading days.
-Negative  = KS+PSI fires first (before PH).
-Positive  = PH fires first.
-Zero      = same day.
-
-Repeated across all alarm events (not just first) using nearest-match
-pairing within a ±20-day window.
-
-Output
-------
-  results/detector_lead_time.csv       -- per-pair summary
-  results/detector_lead_time_chart.png -- histogram of lead times
-
-Usage
------
-    python -m src.experiments.detector_lead_time_analysis
-"""
+"""Lead-time analysis: days by which KS+PSI alarms precede PH alarms at matched events."""
 from __future__ import annotations
 
 import sys

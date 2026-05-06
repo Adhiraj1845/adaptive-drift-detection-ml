@@ -1,31 +1,4 @@
-"""
-Drift-conditional performance analysis.
-
-Core hypothesis: adaptive retraining should help when drift is occurring,
-not during stable periods. This script splits evaluation days into
-"drift-active" (action != "none") vs "quiet" (action == "none") and
-measures accuracy delta separately on each partition.
-
-If the hypothesis holds, acc_delta should be:
-  - Positive and large during drift-active days
-  - Near-zero or negative during quiet days
-
-This directly demonstrates the framework is doing what it claims.
-
-Also computes:
-  - Brier score delta on each partition (calibration check)
-  - Drift-period prediction entropy (confidence of adaptive model)
-  - Cohen's d effect size on drift-active accuracy delta
-
-Output
-------
-  results/drift_conditional.csv          -- per-run partition stats
-  results/drift_conditional_charts.png   -- 4-panel visualisation
-
-Usage
------
-    python -m src.experiments.drift_conditional_analysis
-"""
+"""Partition evaluation days into drift-active vs quiet and compare accuracy delta."""
 from __future__ import annotations
 
 import sys
@@ -88,7 +61,6 @@ def run_drift_conditional_analysis(
         if len(df) < 50:
             continue
 
-        # Partition
         drift_mask = df["action"] != "none"
         quiet_mask = ~drift_mask
 
@@ -113,7 +85,6 @@ def run_drift_conditional_analysis(
         drift_brier_delta = _brier_delta(drift_mask)
         quiet_brier_delta = _brier_delta(quiet_mask)
 
-        # Per-day accuracy difference vectors for effect size
         df["correct_static"]   = (df["y_pred_static"]   == df["y_true_next"]).astype(float)
         df["correct_adaptive"] = (df["y_pred_adaptive"] == df["y_true_next"]).astype(float)
         df["day_acc_delta"]    = df["correct_adaptive"] - df["correct_static"]
@@ -121,14 +92,12 @@ def run_drift_conditional_analysis(
         drift_deltas = df.loc[drift_mask, "day_acc_delta"].values
         quiet_deltas = df.loc[quiet_mask, "day_acc_delta"].values
 
-        # Wilcoxon test: is drift-period acc_delta > quiet-period acc_delta?
         if len(drift_deltas) >= 10 and len(quiet_deltas) >= 10:
             stat, pval = stats.mannwhitneyu(drift_deltas, quiet_deltas,
                                             alternative="greater")
         else:
             stat, pval = float("nan"), float("nan")
 
-        # Adaptive prediction entropy (confidence) during drift vs quiet
         drift_entropy = float("nan")
         quiet_entropy = float("nan")
         if "p1_adaptive" in df.columns:
@@ -210,7 +179,6 @@ def _plot(df: pd.DataFrame, path: str) -> None:
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         axes = axes.flatten()
 
-        # Panel 1: drift vs quiet acc_delta violin
         ax = axes[0]
         parts = ax.violinplot(
             [df["drift_acc_delta"].dropna().values,
@@ -230,13 +198,11 @@ def _plot(df: pd.DataFrame, path: str) -> None:
         ax.text(1, m_d + 0.002, f"μ={m_d:+.4f}", ha="center", fontsize=8, color="#d7191c")
         ax.text(2, m_q + 0.002, f"μ={m_q:+.4f}", ha="center", fontsize=8, color="#2c7bb6")
 
-        # Panel 2: scatter drift_acc_delta vs quiet_acc_delta
         ax2 = axes[1]
         ax2.scatter(df["quiet_acc_delta"], df["drift_acc_delta"],
                     alpha=0.2, s=8, color="#2c7bb6")
         ax2.axhline(0, color="grey", lw=0.7, ls="--")
         ax2.axvline(0, color="grey", lw=0.7, ls="--")
-        # Diagonal y=x line
         lim = max(abs(df[["drift_acc_delta", "quiet_acc_delta"]].values).max(), 0.1)
         ax2.plot([-lim, lim], [-lim, lim], color="grey", lw=0.8, ls=":", alpha=0.5,
                  label="drift = quiet")
@@ -246,7 +212,6 @@ def _plot(df: pd.DataFrame, path: str) -> None:
                       f"Points above diagonal → framework helps more during drift")
         ax2.legend(fontsize=8)
 
-        # Panel 3: Brier delta comparison
         ax3 = axes[2]
         vals = [df["drift_brier_delta"].dropna().values,
                 df["quiet_brier_delta"].dropna().values]
@@ -262,7 +227,6 @@ def _plot(df: pd.DataFrame, path: str) -> None:
         for i, v in enumerate([df["drift_brier_delta"].mean(), df["quiet_brier_delta"].mean()]):
             ax3.text(i + 1, v + 0.001, f"μ={v:+.4f}", ha="center", fontsize=8)
 
-        # Panel 4: % drift days vs acc_delta (scatter — shows framework helps more when there's more drift)
         ax4 = axes[3]
         ax4.scatter(df["pct_drift_days"], df["drift_acc_delta"],
                     alpha=0.2, s=8, color="#1a9641", label="Drift-active acc_delta")

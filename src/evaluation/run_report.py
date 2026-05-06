@@ -145,7 +145,6 @@ def run_evaluation_from_results(
     r_ls_s   = _equity_to_returns(eq["equity_longshort_static"].astype(float).to_numpy())
     r_ls_a   = _equity_to_returns(eq["equity_longshort_adaptive"].astype(float).to_numpy())
 
-    # Market correlations — key requirement: adaptive must exceed static and gap widens
     corr_s = float(np.corrcoef(r_mkt, r_long_s)[0, 1]) if len(r_mkt) > 1 else float("nan")
     corr_a = float(np.corrcoef(r_mkt, r_long_a)[0, 1]) if len(r_mkt) > 1 else float("nan")
 
@@ -158,7 +157,6 @@ def run_evaluation_from_results(
         p_a    = daily["p1_adaptive"].astype(float).to_numpy()
         auc_ci = bootstrap_auc_diff_ci(y, p_s, p_a, n_boot=3000, seed=42)
 
-    # ── Print detailed results ────────────────────────────────────────────────
     print("\n" + "=" * 60)
     print(f"  Statistical Evaluation — {tag}")
     print("=" * 60)
@@ -216,7 +214,6 @@ def run_evaluation_from_results(
     print("  Bootstrap CIs are at 95% (not 99%). For FWER-corrected conclusions,")
     print("  bootstrap_*_ci should be re-run with alpha=0.01 (percentile=[0.5, 99.5]).\n")
 
-    # ── Per-period breakdown ──────────────────────────────────────────────────
     try:
         per_period_breakdown(daily, eq, period="YE")
     except Exception as e:
@@ -278,7 +275,6 @@ def scan_and_evaluate_all(results_dir: str = "results") -> None:
     if not summaries:
         return
 
-    # ── Summary comparison table ───────────────────────────────────────────────
     col_w = 42
     print("\n" + "=" * 110)
     print("  CROSS-RUN COMPARISON SUMMARY")
@@ -312,8 +308,6 @@ def scan_and_evaluate_all(results_dir: str = "results") -> None:
     print("  Sh-L  = Sharpe diff long-only (adaptive−static)   Sh-LS = long-short")
     print("  AUC-d = AUC diff (adaptive−static)\n")
 
-
-# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     results_dir = sys.argv[1] if len(sys.argv) > 1 else "results"

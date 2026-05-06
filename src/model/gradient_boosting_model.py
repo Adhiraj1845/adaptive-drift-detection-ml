@@ -1,4 +1,3 @@
-# src/model/gradient_boosting_model.py
 from __future__ import annotations
 
 from sklearn.ensemble import GradientBoostingClassifier

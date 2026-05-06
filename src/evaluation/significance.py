@@ -1,4 +1,3 @@
-# src/evaluation/significance.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,13 +36,7 @@ def mcnemar_test_from_preds(
     y_pred_static: Iterable[int],
     y_pred_adapt: Iterable[int],
 ) -> McNemarResult:
-    """
-    McNemar test on paired classifier correctness.
-    Tests whether static and adaptive have equal error rates.
-
-    b = static correct & adapt wrong
-    c = static wrong & adapt correct
-    """
+    """McNemar test on paired classifier correctness (equal error rates null)."""
     y_true = np.asarray(list(y_true), dtype=int)
     a = np.asarray(list(y_pred_static), dtype=int)
     b = np.asarray(list(y_pred_adapt), dtype=int)
@@ -76,11 +69,7 @@ def ols_logloss_on_drift(
     logloss_col: str = "logloss_adaptive",
     drift_col: str = "drift_event",
 ) -> OLSResult:
-    """
-    Regress logloss on drift indicator:
-      logloss_t = alpha + beta * drift_t + eps_t
-    This validates that 'drift' days have significantly worse loss.
-    """
+    """Regress logloss on drift indicator: logloss_t = alpha + beta * drift_t + eps_t."""
     df = daily_df.copy()
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
@@ -110,10 +99,7 @@ def bootstrap_sharpe_diff_ci(
     n_boot: int = 5000,
     seed: int = 42,
 ) -> BootstrapCI:
-    """
-    Bootstrap CI for Sharpe(b) - Sharpe(a).
-    If CI excludes 0, difference is statistically significant.
-    """
+    """Bootstrap CI for Sharpe(b) - Sharpe(a)."""
     rng = np.random.default_rng(seed)
     ra = np.asarray(returns_a, dtype=float)
     rb = np.asarray(returns_b, dtype=float)
@@ -141,10 +127,7 @@ def bootstrap_auc_diff_ci(
     n_boot: int = 5000,
     seed: int = 42,
 ) -> BootstrapCI:
-    """
-    Bootstrap CI for AUC(b) - AUC(a).
-    Uses a simple rank-based AUC to avoid extra dependencies.
-    """
+    """Bootstrap CI for AUC(b) - AUC(a) using rank-based (Mann-Whitney) AUC."""
     rng = np.random.default_rng(seed)
     y = np.asarray(y_true, dtype=int)
     pa = np.asarray(p_a, dtype=float)

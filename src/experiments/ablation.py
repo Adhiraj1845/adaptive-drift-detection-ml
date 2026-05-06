@@ -40,8 +40,6 @@ STYLES = {"KS": "--", "PSI": ":", "JS": "-.", "Composite": "-"}
 WIDTHS = {"KS": 1.5, "PSI": 1.5, "JS": 1.5, "Composite": 2.4}
 
 
-# ── Detector factory ──────────────────────────────────────────────────────────
-
 def _make_score_fns() -> dict:
     ks  = KSTestDetector()
     psi = PSIDetector()
@@ -67,7 +65,7 @@ def run_ablation(
     for mag in DRIFT_MAGNITUDES:
         seed_tpr     = {c: [] for c in CONFIG_NAMES}
         seed_fpr     = {c: [] for c in CONFIG_NAMES}
-        seed_latency = {c: [] for c in CONFIG_NAMES}  # N_POST when never detected
+        seed_latency = {c: [] for c in CONFIG_NAMES}
         seed_never   = {c: [] for c in CONFIG_NAMES}
 
         for seed in range(N_SEEDS):
@@ -103,8 +101,6 @@ def run_ablation(
     _save_ablation_chart(results, chart_path)
     return results
 
-
-# ── Pretty printing ───────────────────────────────────────────────────────────
 
 def _print_ablation_table(results: dict) -> None:
     mags  = DRIFT_MAGNITUDES
@@ -182,7 +178,6 @@ def _save_ablation_chart(results: dict, path: str) -> None:
 
             ax2.plot(mags, lats, color=c, ls=ls, lw=lw, marker="o", ms=5, label=name)
 
-        # Reference lines
         ax1.axhline(0.8, color="grey", lw=0.8, ls="--", alpha=0.5, label="80% TPR")
         ax1.axhline(FPR_TARGET, color="red", lw=0.8, ls=":", alpha=0.5,
                     label=f"FPR target ({FPR_TARGET * 100:.0f}%)")
@@ -213,20 +208,11 @@ def _save_ablation_chart(results: dict, path: str) -> None:
         print(f"  [Chart skipped] {e}")
 
 
-# ── Multi-scenario ablation ───────────────────────────────────────────────────
-
 def run_ablation_all_scenarios(
     *,
     chart_path: str = "results/chart_ablation_scenarios.png",
 ) -> dict:
-    """
-    Run the ablation over all three drift scenarios:
-      abrupt  — original mean-shift (N_SEEDS × 7 magnitudes)
-      gradual — linearly ramped mean-shift over 200 days
-      concept — feature-label sign flip (feature marginal unchanged)
-
-    Returns nested dict: results[scenario][config][magnitude or "all"].
-    """
+    """Run detector ablation over abrupt, gradual, and concept drift scenarios."""
     all_results: dict = {}
 
     print("\n=== Ablation Scenario 1/3: Abrupt Drift ===")
@@ -234,7 +220,6 @@ def run_ablation_all_scenarios(
         chart_path=chart_path.replace(".png", "_abrupt.png")
     )
 
-    # ── Gradual drift ──────────────────────────────────────────────────────────
     print("\n=== Ablation Scenario 2/3: Gradual Drift (ramp=200 days) ===")
     gradual_results: dict[str, dict[float, dict]] = {c: {} for c in CONFIG_NAMES}
 
@@ -274,7 +259,6 @@ def run_ablation_all_scenarios(
     _print_ablation_table(gradual_results)
     all_results["gradual"] = gradual_results
 
-    # ── Concept drift ──────────────────────────────────────────────────────────
     print("\n=== Ablation Scenario 3/3: Concept Drift (feature-label sign flip) ===")
     print(f"  X ~ N(0,1) throughout — feature marginal does NOT change.")
     print(f"  Expected: all feature detectors TPR ≈ FPR ≈ {FPR_TARGET}  "
@@ -307,8 +291,6 @@ def run_ablation_all_scenarios(
     all_results["concept"] = concept_results
     return all_results
 
-
-# ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     chart = sys.argv[1] if len(sys.argv) > 1 else "results/chart_ablation.png"

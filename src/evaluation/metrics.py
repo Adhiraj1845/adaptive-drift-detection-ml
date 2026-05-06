@@ -1,4 +1,3 @@
-# src/evaluation/metrics.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,7 +19,6 @@ class ClassificationSummary:
 
 @dataclass(frozen=True)
 class DriftDetectionSummary:
-    # Ground-truth drift window evaluation
     tp: int
     fp: int
     fn: int
@@ -28,7 +26,7 @@ class DriftDetectionSummary:
     precision: float
     recall: float
     f1: float
-    false_alarm_rate: float  # fp / (fp + tn)
+    false_alarm_rate: float
     mean_detection_delay_days: Optional[float]
     median_detection_delay_days: Optional[float]
 
@@ -43,10 +41,7 @@ def classification_summary_from_daily(
     y_col: str = "y_true_next",
     yhat_col: str = "y_pred_adaptive",
 ) -> ClassificationSummary:
-    """
-    Expects columns like those written by main.py:
-      y_true_next, y_pred_adaptive
-    """
+    """Expects columns y_true_next, y_pred_adaptive as written by main.py."""
     y = daily_df[y_col].astype(int).to_numpy()
     yhat = daily_df[yhat_col].astype(int).to_numpy()
 
@@ -97,12 +92,7 @@ def drift_detection_metrics(
     drift_windows: List[Tuple[str | pd.Timestamp, str | pd.Timestamp]],
     detected_col: str = "drift_event",
 ) -> DriftDetectionSummary:
-    """
-    Evaluate daily drift flags vs ground-truth drift windows.
-    - drift_windows is a list of (start, end) timestamps inclusive.
-
-    This treats detection as a per-day binary classification problem.
-    """
+    """Evaluate daily drift flags vs ground-truth drift windows (per-day binary classification)."""
     df = daily_df.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").set_index("date")
@@ -120,7 +110,6 @@ def drift_detection_metrics(
     f1 = _safe_div(2.0 * prec * rec, prec + rec) if (prec + rec) > 0 else 0.0
     far = _safe_div(fp, fp + tn)
 
-    # Detection delay per window: first detection date in window minus window start
     delays = []
     for (start, end) in [(pd.Timestamp(a), pd.Timestamp(b)) for a, b in drift_windows]:
         window_idx = df.index[(df.index >= start) & (df.index <= end)]
@@ -154,10 +143,7 @@ def episode_summary_from_daily(
     drift_level_col: Optional[str] = "drift_level",
     detected_col: str = "drift_event",
 ) -> Dict[str, float]:
-    """
-    Summarise episodes using a daily detected flag.
-    Returns: episode_count, mean_episode_len, pct_days_detected, etc.
-    """
+    """Summarise detection episodes from a daily detected flag."""
     df = daily_df.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").reset_index(drop=True)
@@ -187,7 +173,6 @@ def episode_summary_from_daily(
         "pct_days_detected": float(pct_days),
     }
 
-    # Optional: drift-level frequency if present
     if drift_level_col is not None and drift_level_col in df.columns:
         for lvl in ["low", "moderate", "high", "severe"]:
             out[f"pct_days_level_{lvl}"] = float(np.mean((df[drift_level_col] == lvl).astype(int)))

@@ -1,20 +1,4 @@
-"""
-Feature importance analysis across assets and market regimes.
-
-Trains GBM on two non-overlapping windows per asset and compares which features
-drive predictions before vs after structural breaks (2020 COVID, 2022 rate hikes).
-
-Output
-------
-  results/feature_importance_bars.png   — per-window bar chart for each ticker
-  results/feature_importance_heatmap.png — importance heatmap (features × assets)
-  results/feature_importance.csv        — raw importance table
-
-Usage
------
-    python -m src.experiments.feature_importance_analysis
-    python -m src.experiments.feature_importance_analysis --tickers AAPL MSFT XOM SPY
-"""
+"""GBM feature importance across assets and training windows."""
 from __future__ import annotations
 
 import argparse
@@ -33,10 +17,8 @@ if str(_root) not in sys.path:
 
 from src.data_loader import download_yahoo, load_csv, save_csv, add_features, infer_schema
 
-# Representative cross-asset panel: 2 equity, 1 energy, 1 fixed income, 1 crypto, 1 index
 _DEFAULT_TICKERS = ["AAPL", "MSFT", "XOM", "TLT", "SPY", "QQQ"]
 
-# Two training windows — early regime vs post-COVID/rate-hike regime
 _WINDOWS = {
     "early_2013_2016":  ("2010-01-01", "2013-01-01", "2016-12-31"),  # (data_start, train_start, train_end)
     "covid_2018_2021":  ("2010-01-01", "2018-01-01", "2021-12-31"),
@@ -75,7 +57,7 @@ def _make_features(df: pd.DataFrame) -> list[str]:
 
 
 def _train_window(df: pd.DataFrame, train_start: str, train_end: str) -> tuple[np.ndarray, list[str]] | None:
-    """Train GBM on [train_start, train_end] and return (feature_importances_, feature_names)."""
+    """Train GBM and return (feature_importances_, feature_names)."""
     window = df.loc[train_start:train_end].copy()
     if len(window) < 200:
         return None
@@ -150,7 +132,6 @@ def run_feature_importance(
     return df_imp
 
 
-# ── Feature grouping for readability ──────────────────────────────────────────
 def _group_feature(name: str) -> str:
     if name in {"Return", "LogReturn"}:
         return "Return"

@@ -1,0 +1,259 @@
+% ============================================================
+%  chapters/chapter4.tex
+%  Results, Evaluation and Discussion
+%  COMP3931 Individual Project  Adhiraj Kumar  2025/26
+% ============================================================
+
+\chapter{Results, Evaluation and Discussion}
+\label{ch:results}
+
+Chapter~3 established how the framework is implemented. The question that remains is whether a correctly implemented framework actually helps. Does detecting distributional shift before accuracy degrades translate into better predictions? Is the full detector stack necessary, or does a simpler configuration suffice? .
+
+Section~\ref{sec:exp_setup} describes the experimental setup. Sections~\ref{sec:rq1} to~\ref{sec:rq3} address the research questions in turn. Section~\ref{sec:limitations} documents four categories of underperformance. Sections~\ref{sec:sensitivity} and~\ref{sec:futurework} cover sensitivity analysis and future work before the chapter conclusions in Section~\ref{sec:conclusions4}.
+
+% -----------------------------------------------------------
+\section{Experimental Setup}
+\label{sec:exp_setup}
+% -----------------------------------------------------------
+
+The evaluation comprises 3,332 detector ablation runs and 980 retrain strategy runs, with approximately 420 synthetic benchmark runs providing ground truth TPR/FPR validation. Both models receive the same feature matrix. Any measured difference is attributable solely to the retraining mechanism. The 50 instrument corpus spans six asset classes: large cap US equities, index funds, commodity ETFs, fixed income, international equity, and cryptocurrency. This breadth prevents inflating the average benefit with selection bias. The four pre fixed sub periods correspond to distinct macroeconomic regimes~\cite{hamilton1989,ang2012regime}.
+
+Three primary outcomes are defined as adaptive minus static.
+
+\begin{itemize}
+  \item $\Delta$\textbf{acc}: difference in classification accuracy, the fraction of
+    trading days with a correct direction prediction.
+  \item $\Delta$\textbf{Sharpe}: difference in the Sharpe ratio (annualised return divided by annualised return volatility, introduced in Chapter~3). Risk free rate is zero throughout.
+  \item $\Delta$\textbf{log loss}: sign convention $\Delta = \text{static} -
+    \text{adaptive}$, so a negative value means the adaptive model has worse
+    (higher) log loss.
+\end{itemize}
+
+Four secondary metrics complement the primaries. The \textbf{Sortino ratio} is like the Sharpe ratio but uses only downside volatility in the denominator, penalising the half of risk investors actually care about rather than all volatility equally. The \textbf{Information Coefficient} (IC) is the Spearman rank correlation between predicted probabilities and realised up/down outcomes; unlike accuracy, it measures forecasting skill across the full probability range and is threshold-independent. The \textbf{Calmar ratio} divides annualised mean return by maximum drawdown, the largest peak-to-trough percentage loss over the evaluation period, capturing whether returns were earned without catastrophic interim losses. \textbf{CVaR at the 95th percentile} (Conditional Value at Risk) is the mean daily loss on the worst 5\% of trading days, measuring how bad the bad days actually were.
+
+All confidence intervals use BCa bootstrapping with $n{=}10{,}000$ resamples~\cite{efron1987,efron1993}, correcting for asymmetry in leptokurtic financial returns~\cite{engle1982}. McNemar's test~\cite{mcnemar1947} counts discordant pairs, meaning days where one model is correct and the other wrong, for paired evaluation. Bonferroni correction~\cite{dunn1961} divides the significance threshold by the number of simultaneous tests, preventing false positives when many comparisons are run at once. $\alpha{=}0.05$ throughout.
+
+% -----------------------------------------------------------
+\section{RQ1: Do Distribution Based Detectors Identify Genuine Market Regime Changes?}
+\label{sec:rq1}
+% -----------------------------------------------------------
+
+\textbf{RQ1 is answered in the affirmative.} Four analyses establish this in increasing order of ecological complexity: from controlled synthetic sequences where change points are known exactly, to real market data matched against dated historical events, to live prediction performance across the full instrument corpus.
+
+\subsection{Synthetic Benchmark}
+\label{subsec:synthetic}
+
+Without known change points, TPR and FPR cannot be computed from real data. Controlled Gaussian sequences with a known mean shift $\Delta\mu$ at a fixed position provide exact ground truth across approximately 420 runs and three magnitudes ($\Delta\mu \in \{0.5\sigma,\, 1.0\sigma,\, 2.0\sigma\}$).
+
+At $\Delta\mu \geq 1.0\sigma$, PSI+PH achieves TPR 93 to 100\% with FPR below 5\% and median alarm latency of zero observations. ADWIN~\cite{bifet2007adwin,gama2014survey} achieves 0.2\% TPR under identical conditions. It monitors the error stream and cannot raise an alarm on a feature level shift before accuracy visibly degrades. The same constraint applies to DDM~\cite{gama2004ddm} and EDDM~\cite{baenagarcia2006eddm}. Full detection results are in Figure~\ref{fig:synth_appendix}, Appendix~B.
+
+A supplementary Student $t$ leptokurtic benchmark (Figure~\ref{fig:leptokurtic_synth}, Appendix~B) confirms comparable TPR under heavy tailed distributions. Full results for all 16 configurations are in Figure~\ref{fig:ablation_detector}, Appendix~B.
+
+\subsection{Market Event Alignment}
+\label{subsec:market_events}
+
+Alarms were matched against ten dated market events spanning 2016 to 2024, including the COVID 19 dislocation, SVB collapse, Federal Reserve tightening cycle onset, and February 2018 volatility shock, using a $\pm$15 trading day detection window. The detector ensemble achieved a detection rate of 71.7\% for COVID and 55.0\% for SVB, with a median alarm lag of zero trading days across all ten events. Full results are in Figures~\ref{fig:event_heatmap} and~\ref{fig:event_timeline}, Appendix~B.
+
+The 71.7\% COVID rate is somewhat inflated because the dislocation unfolded over weeks. The 55.0\% SVB rate is more informative as a sharp, concentrated shock. The 45\% SVB non detection is concentrated in instruments with low US banking exposure. Not firing is correct behaviour for those assets. Zero median lag confirms the detector fires contemporaneously with the distributional shift, before accuracy degradation propagates. This is consistent with the covariate shift first ordering~\cite{gama2014survey}.
+
+\subsection{Drift Conditional Performance Analysis}
+\label{subsec:drift_conditional}
+
+Trading days were partitioned into drift active days (within the cooldown window following an alarm) and quiet days. The mean accuracy delta on drift active days is $4.6\times$ larger than on quiet days, with a BCa 95\% CI of $[{+}0.0082,\, {+}0.0116]$ on the drift active subsample (Figure~\ref{fig:drift_conditional_appendix}, Appendix~B).
+
+\subsection{Volatility Regime Moderation}
+\label{subsec:regime}
+
+The corpus was partitioned into low, medium, and high volatility regimes using rolling 20 day realised volatility tertiles. A Kruskal Wallis test~\cite{kruskal1952}, the non parametric equivalent of one way ANOVA, yields $H{=}84.35$, $p{<}0.0001$. This confirms that accuracy delta differs significantly across regimes. The largest advantage is in the medium volatility regime ($\Delta$acc~$= +0.0118$, $\Delta$Sharpe~$= +0.364$). Low volatility is also positive ($+0.0112$, $+0.277$). The high volatility regime shows near zero accuracy delta ($+0.0019$) and negative Sharpe delta ($-0.079$), consistent with the position gate suppressing exposure during peak turbulence days. Full breakdown is in Table~B.9 and Figure~\ref{fig:regime}, Appendix~B. Feature importance stratified by volatility regime is in Figures~\ref{fig:feat_importance} and~\ref{fig:feat_importance_bars}, Appendix~B.
+
+% -----------------------------------------------------------
+\section{RQ2: Does Adaptive Retraining Improve Prediction Quality?}
+\label{sec:rq2}
+% -----------------------------------------------------------
+
+\textbf{RQ2 is answered affirmatively} across six complementary analyses. No single metric fully captures practical value in financial machine learning~\cite{grinold2000,gu2020}.
+
+\subsection{Headline Metrics with BCa Confidence Intervals}
+\label{subsec:headline}
+
+Across 4,312 primary runs, the static baseline achieves mean Sharpe $+0.350$ (median $+0.375$, IQR $[{+}0.10,\,{+}0.62]$). The adaptive model adds mean Sharpe delta $+0.097$ (positive in 61.7\% of runs) and mean accuracy delta $+0.0043$ (positive in 53.5\% of runs). BCa confidence intervals exclude zero at the 95\% level:
+
+\begin{equation}
+  \Delta\text{acc} \;\in\; [{+}0.0035,\; {+}0.0051]^{\star}
+  \label{eq:bca_acc}
+\end{equation}
+\begin{equation}
+  \Delta\text{Sharpe} \;\in\; [{+}0.0842,\; {+}0.1098]^{\star}
+  \label{eq:bca_sharpe}
+\end{equation}
+
+where $\star$ denotes exclusion of zero at the 95\% BCa level. Per subset CIs by asset class and period are in Table~B.6, and the BCa forest plot across all headline metrics is in Figure~\ref{fig:bootstrap_ci_appendix}, Appendix~B. The $\Delta$log loss interval is entirely negative, confirming consistent calibration degradation.
+
+The Sharpe delta of $+0.097$ is the more economically interpretable headline: additional return per unit of risk. The accuracy delta of $+0.0043$ is modest, approximately one additional correct prediction per 230 trading days, but it is consistent across all six asset classes. The Sharpe improvement decomposes into 6\% from improved directional accuracy and 21\% from the conviction gate's position sizing (Figure~\ref{fig:sharpe_decomp}, Appendix~B), which explains why the Sharpe delta is substantially larger than the accuracy delta. The proportion of positive delta runs (53.5\%) exceeds chance at Cohen's $h \approx 0.07$, a small effect by conventional standards (Cohen's $h$ measures the practical difference between two proportions, with 0.2 considered small), but one that compounds meaningfully at institutional scale. The 2022 sub period BCa CI crosses zero, consistent with the limitation in Section~\ref{sec:limitations}.
+
+\subsection{McNemar Per Run Tests}
+\label{subsec:mcnemar}
+
+McNemar's test counts discordant pairs. The adaptive model achieves a 3:1 win ratio. Bonferroni correction yields 25 significant adaptive wins against zero static wins. Because runs sharing an asset or sub period are not fully independent, the 25:0 count is an asymmetry indicator rather than a formal significance count (Table~B.5, Figure~\ref{fig:mcnemar_appendix}, Appendix~B).
+
+\subsection{Risk Adjusted Return Metrics}
+\label{subsec:risk_adjusted}
+
+The Sortino delta is $+0.1519$ (BCa significant, positive in 68.4\% of runs), confirming the Sharpe improvement is accompanied by reduced downside variance. CVaR delta is negative in the majority of runs: the conviction gate amplifies losses when it fires on a day that reverses. Full distributions are in Table~B.10 and Figure~\ref{fig:risk_adjusted}, Appendix~B.
+
+\subsection{Financial Baselines}
+\label{subsec:baselines}
+
+An SMA crossover achieves mean Sharpe $+0.523$. Buy and hold achieves $+0.544$. Both outperform the adaptive model ($+0.506$) because the 2010 to 2024 period was a secular bull market that rewarded passive long exposure. The informative comparison is adaptive versus static ($\Delta{=}{+}0.097$): identical task conditions, different adaptation mechanisms (Table~B.12, Figure~\ref{fig:baselines}, Appendix~B).
+
+\subsection{Information Coefficient Analysis}
+\label{subsec:ic}
+
+The adaptive model achieves $\text{IC}_{\text{adaptive}}{=}{+}0.0173$ against $\text{IC}_{\text{static}}{=}{+}0.0150$ ($\Delta{=}{+}0.0023$; $t{=}3.58$, $p{=}0.0003$, surviving Bonferroni correction). This result deserves particular weight because of its independence from the other two headline metrics.
+
+Accuracy is threshold dependent. It only records whether the predicted probability crossed 0.5, discarding all information about how confident the model was. Sharpe depends on position sizing through the conviction gate, which introduces the gate's own contribution. IC bypasses both. It is the Spearman rank correlation between the full predicted probability vector and the realised outcome vector, measuring how well the model's probability ordering matches reality across the entire range, regardless of where the threshold falls or how positions are sized. A model that consistently assigns higher probabilities to days that turn out to be up days and lower probabilities to days that turn out to be down days will have a high IC, even if both models make identical binary predictions at the 0.5 threshold.
+
+The IC delta ($t{=}3.58$, $p{=}0.0003$) therefore constitutes independent convergent evidence from a third dimension that the adaptive model has improved forecasting skill, not just better threshold crossing accuracy or better position weighted returns. IC and ICIR distributions are in Figure~\ref{fig:ic}, Appendix~B.
+
+\subsection{Transaction Cost Break Even Analysis}
+\label{subsec:tc}
+
+The median break even transaction cost is 310 basis points among positive delta runs. At 5~bps, typical for liquid retail equity trades, 98.4\% of positive delta runs remain profitable. At 20~bps, a realistic institutional cost, 94.4\% remain profitable. Break even curves by asset class are in Figure~\ref{fig:tc} and Table~B.11, Appendix~B.
+
+% -----------------------------------------------------------
+\section{RQ3: What Is the Minimum Sufficient Detector Configuration?}
+\label{sec:rq3}
+% -----------------------------------------------------------
+
+\textbf{RQ3 is answered}: PH alone is the minimum sufficient detector, matching the full ensemble on accuracy at approximately half the runtime. This result simultaneously rejects the lead time hypothesis from Chapter~2, Section~\ref{sec:detector_rationale}. PH monitors rolling log loss, quickly accumulating small persistent errors as covariate shifts manifest. In finance, such shifts almost always cause small immediate changes in \(P(y \mid \mathbf{x})\), which PH detects via the loss stream without separate population statistics.
+
+\subsection{Detector Ablation}
+\label{subsec:det_ablation}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Detector ablation: selected configurations ranked by accuracy delta.
+    Values are means across all runs. Runtime rounded to nearest second.
+    Full 16 row results in Table~B.2, Appendix~B.}
+  \label{tab:det_ablation_summary}
+  \begin{tabular}{lcccc}
+    \hline
+    \textbf{Configuration} & $\bm{\Delta}$\textbf{acc}
+      & $\bm{\Delta}$\textbf{Sharpe} & \textbf{Mean retrains}
+      & \textbf{Mean runtime (s)} \\
+    \hline
+    PH only \emph{(recommended)} & +0.0068 & +0.103 & 14 &  82 \\
+    JS + PH                      & +0.0048 & +0.132 &  9 &  84 \\
+    PSI + PH                     & +0.0062 & +0.099 & 35 & 145 \\
+    Full ensemble (KS+PSI+JS+PH) & +0.0062 & +0.099 & 35 & 163 \\
+    PSI only                     & +0.0054 & +0.096 & 43 & 159 \\
+    KS only                      & +0.0023 & +0.097 &  7 &  77 \\
+    JS only                      & +0.0017 & +0.105 &  7 &  77 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+PH alone is Pareto optimal on accuracy and runtime ($+0.0068$~$\Delta$acc, 82~s). Pareto optimal here means no other configuration achieves both higher accuracy and lower runtime simultaneously: any configuration that improves on one of those objectives does worse on the other. PH monitors rolling log loss directly, giving a signal calibrated to the prediction task. JS+PH achieves the highest $\Delta$Sharpe ($+0.132$) at 84~s, making it preferable when risk adjusted return is the primary objective.
+
+PSI+PH and the full ensemble converge to $+0.0062$~$\Delta$acc at 35 retrains and substantially higher runtime, with no accuracy gain over PH alone. PSI alone triggers 43 retrains at $+0.0054$. Each redundant alarm adds a retrain that degrades model weight history. KS is redundant when any PSI class detector is active, consistent with Rabanser et al.~\cite{rabanser2019}. Asset level results and the full Pareto frontier, showing the trade off between accuracy, Sharpe, and runtime across all 16 configurations, are in Table~B.2, Figure~\ref{fig:ablation_asset}, and Figure~\ref{fig:cost} (Appendix~B). Per-asset accuracy deltas for the top and bottom 10 instruments under the PH configuration are in Table~B.3, Appendix~B.
+
+The lead time analysis explains why. Alarm events in KS+PSI only runs were matched to the nearest PH only alarm within $\pm$20 trading days across 47,845 matched events from 204 ticker period pairs. The lead time had a median of 0 days (IQR $[-1, +1]$). PH fired first in 74.1\% of events (Figure~\ref{fig:lead_time}, Appendix~B).
+
+\textbf {The lead time hypothesis is rejected} upstream feature detectors do not fire earlier than direct loss monitoring. Additional KS+PSI alarms are redundant. The reason is structural: financial covariate shifts are rarely pure. A change in $P(\mathbf{x})$ almost immediately affects the loss, since the feature--return relationship is never stable. PH's cumulative sum detects persistent loss increases within days, as fast as or faster than any population statistic.
+
+\subsection{Retrain Strategy Ablation}
+
+\label{subsec:retrain_ablation}
+\begin{table}[htbp]
+  \centering
+  \caption{Retrain strategy comparison. Mean values across 980 runs. Adding the
+    error rate trigger on top of drift detection produces identical results to
+    drift only, because distribution alarms pre empt error events by a mean of
+    11.0 trading days. Full results in Table~B.4, Appendix~B.}
+  \label{tab:retrain_summary}
+  \begin{tabular}{lcc}
+    \hline
+    \textbf{Strategy} & $\bm{\Delta}$\textbf{Sharpe (mean)} & \textbf{Mean retrains} \\
+    \hline
+    SGD weighted update        & +0.128 & 31 \\
+    Drift only trigger         & +0.099 & 35 \\
+    Drift + error trigger      & +0.099 & 35 \\
+    All strategies combined    & +0.093 & 127 \\
+    Scheduled retrain          & +0.063 & 127 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Drift+error trigger achieves identical results to drift only: both $+0.099$ Sharpe delta at 35 retrains. The distribution based controller fires 11.0 days before rolling accuracy drops below its pre shift baseline (Figure~\ref{fig:error_lag}, Appendix~B). By the time an error trigger would fire, a corrective retrain has already been dispatched~\cite{gama2014survey}. The SGD weighted update achieves the highest Sharpe delta ($+0.128$) at the fewest retrains (31), confirming the stability plasticity balance from Chapter~2, Section~\ref{subsec:param_gamma}. Full comparison across four evaluation metrics is in Figure~\ref{fig:retrain_ablation}, Appendix~B.
+
+% -----------------------------------------------------------
+\section{Limitations and Honest Discussion}
+\label{sec:limitations}
+% -----------------------------------------------------------
+
+\paragraph{Log loss degradation.}
+The log loss delta is $-0.20$, entirely negative in 97.5\% of runs. The mechanism is explained by the calibration discrimination decomposition of DeGroot and Fienberg~\cite{degroot1983}, who show that log loss can be decomposed into two independent components.
+
+The first is \emph{calibration}: how closely predicted probabilities match empirical frequencies. If the model says a day has a 70\% chance of closing up, do 70\% of those days actually close up? The second is \emph{refinement}: how well the model discriminates between up days and down days, regardless of the probability scale.
+
+When the framework retrains on recent data, the decision boundary shifts to better separate up days from down days in the new distribution. Refinement improves. But without a dedicated recalibration step applied after retraining, the raw probability outputs remain anchored to the pre shift distribution. The model moves the boundary to the right place, but the probability scale still reflects old frequencies. Calibration degrades. The model becomes overconfident in one direction, even as directional accuracy improves. Log loss penalises exactly this kind of confident miscalibration, which is why accuracy goes up while log loss goes down.
+
+This is a structural consequence of retraining the decision boundary without simultaneously recalibrating the probability scale. A hybrid switching strategy (Figure~\ref{fig:hybrid}, Appendix~B) that selects between adaptive and static on a rolling log loss signal reduces this degradation by 71\% but does not eliminate it. For applications requiring well calibrated probabilities, such as options pricing or regulatory risk weighting under Basel~III, Platt scaling~\cite{platt1999} or isotonic regression~\cite{niculescumizil2005} should be applied at each retrain event to recalibrate the probability outputs after the decision boundary has been updated.
+
+\paragraph{Maximum drawdown amplification.}
+The adaptive model's maximum drawdown is approximately $6\times$ worse than the static baseline in median terms (static $-4.7\%$, adaptive $-28.3\%$). The mechanism follows directly from the conviction gate design. When the composite drift index is elevated, exactly the periods when the adaptive model is most active, the position weight $w_{\text{adapt}}$ rises toward its 0.90 ceiling. This means the adapted model's predictions carry a 90\% weight on the days with the highest detected uncertainty. On those days the model is right more often than the static baseline, producing the $4.6\times$ drift active accuracy gain. But when it is wrong, the amplified position weight turns a moderate adverse move into a large drawdown. The gate was designed to maximise the use of the adaptive signal when it is strongest, and it does exactly that, including on the rare occasions when the signal fires but the market moves in the opposite direction.
+
+The Sortino delta remains positive ($+0.1519$, BCa significant) and the Calmar delta is positive ($+0.0102$), indicating the drawdown deterioration is driven by a small number of high amplitude adverse events rather than systematic downside excess. Strategies with hard drawdown constraints, common in regulated funds and risk parity mandates~\cite{rockafellar2000}, would need the conviction gate recalibrated or replaced with a volatility targeting mechanism that scales position weight inversely with realised volatility rather than proportionally with drift severity.
+
+\paragraph{International equities and fixed income.}
+The adaptive model produces near zero or negative accuracy delta for international equity ETFs (VEU, EEM) and fixed income proxies (TLT, AGG). The OHLCV feature set captures less of these instruments' dynamics, which are driven by macro factors absent from price data. In the absence of frequent drift alarms, each SGD update produces small but consistent accuracy degradation. This is consistent with Lo's AMH~\cite{lo2004amh}: adaptation adds value where short term information content is high. For international equities, price-based features have weak signal due to currency and sovereign risk. Fixed income is driven by rates and credit spreads, absent from OHLCV, so drift events are rare, and retraining adds noise. Conversely, BTC-USD shows the largest improvement: its technical, momentum-driven dynamics make features highly informative and drift detection frequent.
+
+\paragraph{2022 Federal Reserve tightening cycle.}
+
+The 2022 calendar year shows mean accuracy delta $-0.0034$, with the adaptive advantage effectively disappearing. The Federal Reserve's hiking cycle produced a simultaneous sell-off in equities and bonds~\cite{ang2012regime}, breaking a decade-long correlation pattern across all 50 instruments at once. The root cause is architectural: the 400-row minimum training window forces pre-shift data into every retrain regardless of trigger timing, meaning no detector can excise the corrupted correlation structure below that floor. The targeted sensitivity run across $\{200, 300, 400, 500\}$ rows confirms identical degradation for all values in 2022, while the 2019--2020 baseline yields positive delta across all four, confirming the failure is regime-specific (Figure~\ref{fig:min_retrain_rows_chart}, Appendix~B). Per-year accuracy delta across all nine calendar years (2016--2024) is in Table~B.8 and Figure~\ref{fig:period_deepdive}, Appendix~B.
+
+
+\paragraph{Survivorship bias.}
+The 50 instrument corpus excludes delisted instruments, introducing mild survivorship bias. A point in time constituent dataset would be required for live deployment.
+
+% -----------------------------------------------------------
+\section{Hyperparameter Sensitivity}
+\label{sec:sensitivity}
+% -----------------------------------------------------------
+
+Window size and cooldown were varied across a 25 point grid ($\{50,75,100,125,150\}$ days $\times$ $\{2,3,5,7,10\}$ days) for 16 representative tickers. The coefficient of variation (CV) is below 3 for 13 of 16 tickers, confirming qualitative conclusions are stable across the tested range. The three exceptions are GLD (CV~11.3), XOM (CV~4.5), and \^{}GSPC (CV~6.6). These reflect genuine commodity driven volatility clustering rather than pathological instability. Heatmap and per ticker summary are in Figure~\ref{fig:sensitivity} and Table~B.7, Appendix~B~\cite{bergstra2012,probst2019}.
+
+The \texttt{min\_retrain\_rows} targeted run across $\{200, 300, 400, 500\}$ rows on 12 tickers for 2021 to 2022 confirms: mean $\Delta$acc remains negative ($-0.012$ to $-0.010$) in 2022 for all values, while the 2019 to 2020 baseline yields $+0.024$ to $+0.028$ with 75\% of runs positive (Figure~\ref{fig:min_retrain_rows_chart}, Appendix~B).
+
+\section{Future Work}
+\label{sec:futurework}
+
+Six directions emerge directly from the limitations identified above. Each targets a specific failure mode rather than a general aspiration.
+
+\textbf{Online probability calibration.} The most pressing limitation is the calibration--discrimination trade-off. Retraining improves directional accuracy but miscalibrates probabilities, as the decision boundary moves without recalibration. Applying Platt scaling or isotonic regression after each retrain would realign outputs to empirical frequencies. This would make the framework viable for applications like options pricing or Basel~III risk weighting, where calibrated probabilities matter as much as directional accuracy.
+
+
+\textbf{Volatility targeted conviction gate.} The current position gate increases the adaptive model's weight when drift is detected, which amplifies losses when the framework fires in the wrong direction. Scaling the gate inversely with realised volatility, a standard approach in risk parity construction~\cite{rockafellar2000}, would automatically reduce position weight during the high-uncertainty periods where the gate is most dangerous. This would cap maximum drawdown without sacrificing the accuracy gains the gate provides during normal drift events.
+
+\textbf{Label drift monitoring.} The detector stack monitors input feature distributions and model performance, but not the target variable itself. A rolling chi-squared test on the proportion of up days versus down days would complete the Gama et al.~\cite{gama2014survey} drift taxonomy by adding explicit prior probability shift detection. This matters particularly for 2022-type macro regimes, where the proportion of up days shifted sharply and persistently across equity markets. A label drift signal would give the controller earlier warning of exactly the structural breaks the current stack handles least well.
+
+\textbf{Cross asset regime detection.} The framework detects drift one instrument at a time. The 2022 failure was systemic: all 50 instruments degraded simultaneously, as one macro shock broke a decade-old cross-asset correlation. Extending detection to portfolio-level factor exposures (e.g., PSI on duration and equity risk premium) would identify such breaks as a single coordinated event rather than 50 asynchronous ones.
+
+\textbf{Streaming deployment.} The evaluation uses daily closing prices. Page--Hinkley updates in constant time, making it suitable for intra-day streams. An open question is whether the 11-day lead time compresses at sub-daily horizons and whether retraining remains viable when triggers arrive multiple times per session.
+
+\textbf{Transfer learning across instruments.} The framework treats each asset independently, retraining from scratch. Transfer learning would let a model trained on a liquid asset (e.g., SPY) inform adaptation of correlated, data-sparse assets. This is especially relevant for international equity and fixed income, where the framework performed poorly: those assets have few informative drift events in their own histories but share regime structure with better-instrumented proxies.
+
+% -----------------------------------------------------------
+\section{Conclusions}
+\label{sec:conclusions4}
+% -----------------------------------------------------------
+
+Two empirical findings connect the results across all three research questions. The 11.0 day lag between feature distribution shift and accuracy degradation explains why distribution based alarms pre empt error rate triggers. The lead time analysis, showing PH fired first in 74.1\% of matched events with a median lag of zero days over KS+PSI, explains why PH alone is Pareto optimal and the full ensemble adds no accuracy benefit.
+
+\textbf{RQ1} is answered affirmatively. PSI+PH achieves 93 to 100\% TPR versus 0.2\% for ADWIN on the synthetic benchmark. Market event alignment (71.7\% COVID, 55.0\% SVB, zero median lag) and the $4.6\times$ drift conditional accuracy gap confirm ecological validity. Kruskal Wallis ($H{=}84.35$, $p{<}0.0001$) confirms the advantage peaks in medium volatility regimes.
+
+\textbf{RQ2} is answered with strong evidence. BCa CIs exclude zero for $\Delta$acc and $\Delta$Sharpe. IC delta ($t{=}3.58$, $p{=}0.0003$, surviving Bonferroni) provides independent convergent evidence from a third metric that the adaptive model has genuinely improved forecasting skill. The 25:0 Bonferroni win count establishes run level dominance. The $+0.097$ Sharpe delta is robust to realistic transaction costs (98.4\% of positive delta runs viable at 5~bps; 94.4\% at 20~bps).
+
+\textbf{RQ3}: PH alone is Pareto optimal ($+0.0068$~$\Delta$acc, 82~s). JS+PH is preferred when Sharpe is the primary objective ($+0.132$, 84~s). The lead time benefit of upstream feature detectors does not materialise. PH suffices because it monitors the 11 day window during which prediction degradation is already computable but not yet visible in accuracy, without requiring labels and without the false alarm overhead of population level statistics.
+
+Four limitations define the deployment boundary: probability calibration degradation, maximum drawdown amplification, asset class selectivity, and the 2022 batch retraining ceiling. Each has a concrete remedy in Section~\ref{sec:futurework}. The framework adds measurable value where short term information content is high, drift events are detectable by a rolling log loss monitor, and position sizing can absorb the occasional high conviction adverse event.

@@ -1,27 +1,4 @@
-"""
-Retrain-strategy ablation across 50 assets × 4 time windows × 5 retrain combos.
-
-Design
-------
-All 5 detector types are always ON (KS, PSI, JS, PageHinkley, PredictionDrift).
-What varies is which *additional* adaptation mechanisms fire:
-
-  drift_only      – only drift-triggered batch retrain (baseline)
-  sgd             – drift-triggered + daily SGD online updates
-  scheduled       – drift-triggered + periodic batch retrain every 10 days
-  error_trigger   – drift-triggered + retrain when static accuracy drops
-  all             – all three additional mechanisms enabled
-
-This isolates the marginal contribution of each extra adaptation channel beyond
-the core drift-triggered retrain.
-
-Usage
------
-    python -m src.experiments.retrain_ablation                # all CPU cores
-    python -m src.experiments.retrain_ablation --workers 8    # explicit count
-    python -m src.experiments.retrain_ablation --dry-run      # list jobs only
-    python -m src.experiments.retrain_ablation --rerun-errors # retry failed runs
-"""
+"""Retrain-strategy ablation: isolates marginal contribution of each adaptation mechanism."""
 from __future__ import annotations
 
 import argparse
@@ -34,15 +11,12 @@ from typing import Any
 
 import pandas as pd
 
-# ── Re-use assets and periods from detector_ablation ──────────────────────
 from src.experiments.detector_ablation import (
     _BASE_ASSETS,
     _PERIOD_VARIANTS,
     _prefetch_all_data,
 )
 
-# ── 5 retrain strategy combos ──────────────────────────────────────────────
-# All detectors are ON for every combo.  Only the 3 extra adaptation toggles vary.
 _RETRAIN_COMBOS: list[dict] = [
     {
         "label":                   "drift_only",

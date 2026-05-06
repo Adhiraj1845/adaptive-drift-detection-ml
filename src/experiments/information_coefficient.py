@@ -1,33 +1,4 @@
-"""
-Information Coefficient (IC) and IC Information Ratio (ICIR) analysis.
-
-IC is the standard quant-finance measure of predictive power:
-    IC(t) = Spearman rank correlation between model signal and next-day return
-
-ICIR = mean(IC) / std(IC)   — signal consistency (Sharpe of the IC series)
-
-Industry benchmarks (Grinold & Kahn, 1999):
-    IC  > 0.05 : useful signal
-    IC  > 0.10 : strong signal
-    ICIR > 0.50 : consistently predictive
-    ICIR > 1.00 : exceptional
-
-The signal here is p1 (predicted probability of up move).
-Higher p1 → stronger long signal.
-
-Also computes:
-  - Hit rate: % of days where sign(signal - 0.5) == sign(return)
-  - Active IC: IC computed only on drift-active days
-  - Decay: does IC degrade over the eval period? (rolling IC)
-
-Output
-------
-  results/information_coefficient.csv     -- per-run IC stats
-  results/ic_charts.png                   -- IC distribution + decay charts
-
-Usage
------
-    python -m src.experiments.information_coefficient
+"""Information Coefficient (IC) and ICIR: Spearman rank correlation of p1 with next-day returns.
 """
 from __future__ import annotations
 

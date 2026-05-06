@@ -1,21 +1,4 @@
-"""
-Computational cost analysis.
-
-Analyses the elapsed_s column from ablation_summary.csv to answer:
-  1. How many detectors ON vs runtime?
-  2. Do more detectors = more retrains = more runtime?
-  3. What is the cost-efficiency frontier (acc_delta / elapsed_s)?
-  4. PSI+PH vs full ensemble: same accuracy at what fraction of cost?
-
-Output
-------
-  results/cost_analysis.csv          — per-combo cost-efficiency stats
-  results/cost_analysis_charts.png   — 4-panel chart
-
-Usage
------
-    python -m src.experiments.computational_cost_analysis
-"""
+"""Runtime cost and cost-efficiency analysis across detector combos."""
 from __future__ import annotations
 
 import os
@@ -66,7 +49,6 @@ def run_cost_analysis(
     df["combo_label"]  = df.apply(_combo_label, axis=1)
     df["cost_eff"]     = (df["acc_delta"] / df["elapsed_s"].clip(lower=0.1)).round(6)
 
-    # ── Per-combo aggregate ────────────────────────────────────────────────────
     combo_stats = (
         df.groupby(["combo_label", "n_detectors"])
         .agg(
@@ -88,7 +70,6 @@ def run_cost_analysis(
     print("\nCost-efficiency by detector combo:")
     print(combo_stats.to_string(index=False))
 
-    # ── PSI+PH vs full-ensemble spotlight ─────────────────────────────────────
     full_ensemble = df[df["combo_label"] == "KS+PSI+JS+PH"]
     psi_ph        = df[df["combo_label"] == "PSI+PH"]
     if len(full_ensemble) > 0 and len(psi_ph) > 0:
@@ -114,7 +95,6 @@ def _plot_cost(df: pd.DataFrame, combo_stats: pd.DataFrame, path: str) -> None:
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         axes = axes.flatten()
 
-        # ── Panel 1: n_detectors vs mean elapsed_s (scatter + mean line) ──────
         ax = axes[0]
         jitter = np.random.RandomState(0).uniform(-0.15, 0.15, len(df))
         ax.scatter(df["n_detectors"] + jitter, df["elapsed_s"],
@@ -127,11 +107,9 @@ def _plot_cost(df: pd.DataFrame, combo_stats: pd.DataFrame, path: str) -> None:
         ax.set_title("Runtime vs detector count")
         ax.legend()
 
-        # ── Panel 2: n_retrains vs elapsed_s ─────────────────────────────────
         ax = axes[1]
         ax.scatter(df["n_retrains"], df["elapsed_s"],
                    alpha=0.2, s=8, color="#1a9641")
-        # Bin by retrains
         bins = pd.cut(df["n_retrains"], bins=10)
         mean_by_bin = df.groupby(bins, observed=False)["elapsed_s"].mean()
         midpoints = [iv.mid for iv in mean_by_bin.index]
@@ -142,7 +120,6 @@ def _plot_cost(df: pd.DataFrame, combo_stats: pd.DataFrame, path: str) -> None:
         ax.set_title("Runtime vs retrain count")
         ax.legend()
 
-        # ── Panel 3: combo_label vs mean elapsed_s (horizontal bar) ──────────
         ax = axes[2]
         cs = combo_stats.sort_values("mean_elapsed_s")
         colours_bar = plt.cm.viridis(
@@ -153,7 +130,6 @@ def _plot_cost(df: pd.DataFrame, combo_stats: pd.DataFrame, path: str) -> None:
         ax.set_title("Mean runtime by detector combo")
         ax.tick_params(axis="y", labelsize=8)
 
-        # ── Panel 4: cost-efficiency frontier (acc_delta vs elapsed_s) ────────
         ax = axes[3]
         combo_means = df.groupby("combo_label").agg(
             x=("elapsed_s", "mean"),

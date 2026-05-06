@@ -1,33 +1,4 @@
-"""
-Hybrid switching strategy analysis.
-
-Motivated by the drift-conditional finding: adaptive is better during
-drift-active periods (+0.0099 acc_delta) but only marginally better
-during quiet periods (+0.0022). The natural implication is a switching rule:
-
-    p1_switch(t) = p1_adaptive(t)  if action(t) != "none"
-                   p1_static(t)    otherwise
-
-This script evaluates the switching strategy across all 4,312 runs and
-compares it to both the pure static and pure adaptive baselines.
-
-Expected outcome: switching strategy should outperform both baselines
-because it uses adaptive predictions exactly when they add value and
-falls back to the well-calibrated static model otherwise.
-
-Also tests a smooth-blended variant:
-    p1_blend(t) = α * p1_adaptive + (1-α) * p1_static
-    where α = drift_index (0 in quiet, 1 at max drift)
-
-Output
-------
-  results/hybrid_strategy.csv           -- per-run metrics
-  results/hybrid_strategy_charts.png    -- 4-panel comparison
-
-Usage
------
-    python -m src.experiments.hybrid_switching_strategy
-"""
+"""Hybrid switching: use adaptive predictions during drift-active periods, static otherwise."""
 from __future__ import annotations
 
 import math

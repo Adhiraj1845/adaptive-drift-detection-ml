@@ -1,4 +1,3 @@
-# src/evaluation/synthetic_drift.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -46,13 +45,7 @@ def inject_synthetic_drift(
     cfg: SyntheticDriftConfig,
     stream_start: pd.Timestamp,
 ) -> SyntheticRunResult:
-    """
-    Inject synthetic drift into an already-featured dataframe.
-    You should call this AFTER add_features (so Return exists),
-    or at least ensure cfg.feature_name exists.
-
-    Drift is injected on rows in [stream_start + start_day, stream_start + end_day].
-    """
+    """Inject synthetic drift into an already-featured dataframe (call after add_features)."""
     out = _ensure_datetime_index(df)
 
     start = pd.Timestamp(stream_start) + pd.Timedelta(days=int(cfg.drift_start_day))
@@ -62,20 +55,17 @@ def inject_synthetic_drift(
     if mask.sum() == 0:
         return SyntheticRunResult(df=out, drift_windows=[(start, end)])
 
-    # Mean shift on a feature
     if cfg.mean_shift != 0.0:
         if cfg.feature_name not in out.columns:
             raise KeyError(f"Feature '{cfg.feature_name}' not in df columns.")
         out.loc[mask, cfg.feature_name] = out.loc[mask, cfg.feature_name].astype(float) + float(cfg.mean_shift)
 
-    # Volatility scaling on Return-like signal
     if cfg.volatility_scale != 1.0:
         if "Return" in out.columns:
             out.loc[mask, "Return"] = out.loc[mask, "Return"].astype(float) * float(cfg.volatility_scale)
         if "LogReturn" in out.columns:
             out.loc[mask, "LogReturn"] = out.loc[mask, "LogReturn"].astype(float) * float(cfg.volatility_scale)
 
-    # Correlation flip (simple proxy): flip CO_Return if present
     if cfg.correlation_flip and "CO_Return" in out.columns:
         out.loc[mask, "CO_Return"] = -out.loc[mask, "CO_Return"].astype(float)
 
@@ -91,12 +81,7 @@ def make_synthetic_experiment(
     stream_start: str,
     stream_end: str,
 ) -> SyntheticRunResult:
-    """
-    Takes a raw OHLCV market df, creates features, slices into train/stream,
-    then injects drift into the stream period and returns a combined df.
-
-    This is intentionally simple so your dissertation can explain it cleanly.
-    """
+    """Feature, slice into train/stream, inject drift, and return a combined df."""
     df = _ensure_datetime_index(base_market_df)
     df = add_features(df)
 
@@ -113,7 +98,6 @@ def make_synthetic_experiment(
 
     injected = inject_synthetic_drift(df_stream, cfg=cfg, stream_start=stream_start_ts)
 
-    # Return the stream with drift injected (train stays unchanged)
     full = pd.concat([df_train, injected.df], axis=0).sort_index()
     return SyntheticRunResult(df=full, drift_windows=injected.drift_windows)
 

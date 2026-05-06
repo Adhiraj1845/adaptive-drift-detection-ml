@@ -1,32 +1,4 @@
-"""
-Bootstrap confidence intervals on all headline metrics.
-
-Computes 95% BCa (bias-corrected and accelerated) bootstrap confidence
-intervals for the main results across the full 4,312-run ablation set.
-
-Metrics covered:
-  - acc_delta (overall, per group, per period, per detector combo)
-  - sharpe_delta
-  - logloss_delta
-  - McNemar win/loss rates
-  - Drift-conditional acc_delta gap (drift_active - quiet)
-  - Sortino delta, Information Ratio
-
-The BCa method (Efron, 1987) is preferred over percentile bootstrap
-as it corrects for both bias and skewness in the sampling distribution.
-
-n_boot = 10,000 by default.
-
-Output
-------
-  results/bootstrap_ci.csv         -- all CIs in one table
-  results/bootstrap_ci_chart.png   -- forest plot of key CIs
-
-Usage
------
-    python -m src.experiments.bootstrap_ci
-    python -m src.experiments.bootstrap_ci --n_boot 5000
-"""
+"""BCa bootstrap confidence intervals on all headline metrics across the ablation set."""
 from __future__ import annotations
 
 import argparse
@@ -48,10 +20,7 @@ _RNG_SEED = 42
 
 def _bca_ci(data: np.ndarray, stat_fn: Callable, n_boot: int,
              alpha: float = 0.05, rng: np.random.Generator = None) -> tuple[float, float, float]:
-    """
-    BCa bootstrap CI (Efron 1987).
-    Returns (point_estimate, ci_lo, ci_hi).
-    """
+    """BCa bootstrap CI (Efron 1987); returns (point_estimate, ci_lo, ci_hi)."""
     data = data[np.isfinite(data)]
     if len(data) < 5:
         est = stat_fn(data)
@@ -60,7 +29,6 @@ def _bca_ci(data: np.ndarray, stat_fn: Callable, n_boot: int,
     rng = rng or np.random.default_rng(_RNG_SEED)
     est = stat_fn(data)
 
-    # Bootstrap distribution
     boot = np.array([
         stat_fn(rng.choice(data, size=len(data), replace=True))
         for _ in range(n_boot)
@@ -69,12 +37,10 @@ def _bca_ci(data: np.ndarray, stat_fn: Callable, n_boot: int,
     if len(boot) < 10:
         return float(est), float("nan"), float("nan")
 
-    # Bias correction
     z0 = float(np.sum(boot < est) / len(boot))
     from scipy.special import ndtri, ndtr
     z0_hat = ndtri(np.clip(z0, 1e-9, 1 - 1e-9))
 
-    # Acceleration (jackknife)
     jk = np.array([stat_fn(np.delete(data, i)) for i in range(min(len(data), 200))])
     jk = jk[np.isfinite(jk)]
     if len(jk) > 0:
@@ -129,25 +95,21 @@ def run_bootstrap_ci(
         print(f"  {label:<45s}: {est:+.4f}  [{lo:+.4f}, {hi:+.4f}]  "
               f"{'★' if lo > 0 or hi < 0 else ' '}")
 
-    # ── Overall metrics ──────────────────────────────────────────────────────
     print("\nOverall (3,332 ablation runs):")
     _add("acc_delta (overall)",     ok["acc_delta"].values)
     _add("sharpe_delta (overall)",  ok["sharpe_delta"].values)
     _add("logloss_delta (overall)", ok["logloss_delta"].values)
 
-    # ── Per-period ───────────────────────────────────────────────────────────
     print("\nPer evaluation period:")
     for p_lbl, g in ok.groupby("period_label"):
         _add(f"acc_delta ({p_lbl})",    g["acc_delta"].values)
         _add(f"sharpe_delta ({p_lbl})", g["sharpe_delta"].values)
 
-    # ── Per-group ────────────────────────────────────────────────────────────
     print("\nPer asset group:")
     for grp, g in ok.groupby("group"):
         _add(f"acc_delta ({grp})",    g["acc_delta"].values)
         _add(f"sharpe_delta ({grp})", g["sharpe_delta"].values)
 
-    # ── Per-combo (top combos) ────────────────────────────────────────────────
     def _combo(r):
         parts = []
         for f, l in [("use_ks","KS"),("use_psi","PSI"),("use_js","JS"),("use_page_hinkley","PH")]:
@@ -162,7 +124,6 @@ def run_bootstrap_ci(
             _add(f"acc_delta ({combo})",    g["acc_delta"].values)
             _add(f"sharpe_delta ({combo})", g["sharpe_delta"].values)
 
-    # ── Drift-conditional gap (from drift_conditional.csv if exists) ─────────
     dc_path = Path("results/drift_conditional.csv")
     if dc_path.exists():
         dc = pd.read_csv(dc_path).dropna(subset=["drift_acc_delta", "quiet_acc_delta"])
@@ -172,7 +133,6 @@ def run_bootstrap_ci(
         _add("acc_delta (quiet)",           dc["quiet_acc_delta"].values)
         _add("drift - quiet gap",           dc["gap"].values)
 
-    # ── Risk-adjusted (from risk_adjusted.csv if exists) ─────────────────────
     ra_path = Path("results/risk_adjusted.csv")
     if ra_path.exists():
         ra = pd.read_csv(ra_path).dropna(subset=["sortino_delta"])
@@ -183,7 +143,6 @@ def run_bootstrap_ci(
         ir_vals = ir_vals[np.isfinite(ir_vals) & (np.abs(ir_vals) < 20)]
         _add("information_ratio",  ir_vals)
 
-    # ── IC (from information_coefficient.csv if exists) ──────────────────────
     ic_path = Path("results/information_coefficient.csv")
     if ic_path.exists():
         ic = pd.read_csv(ic_path).dropna(subset=["ic_delta"])
@@ -206,7 +165,6 @@ def _plot(df: pd.DataFrame, path: str) -> None:
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        # Filter to key metrics for forest plot
         key = df[df["metric"].str.contains(
             "overall|drift-active|quiet|gap|group|sortino|information_ratio|ic_delta",
             case=False

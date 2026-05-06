@@ -1,23 +1,4 @@
-"""
-Per-run McNemar test analysis on ablation daily monitoring CSVs.
-
-For each daily_monitoring_*.csv, runs a McNemar test comparing static vs adaptive
-predictions.  Aggregates:
-  - % of runs where adaptive significantly beats static (p < 0.05, corrected)
-  - % where static significantly beats adaptive
-  - Distribution of McNemar chi² / p-values by detector combo and asset group
-
-Output
-------
-  results/mcnemar_per_run.csv          — per-file test result
-  results/mcnemar_combo_summary.csv    — win/neutral/loss rates by detector combo
-  results/mcnemar_chart.png            — volcano-style plot + bar chart
-
-Usage
------
-    python -m src.experiments.ablation_mcnemar
-    python -m src.experiments.ablation_mcnemar --alpha 0.01
-"""
+"""Per-run McNemar test comparing static vs adaptive across ablation monitoring CSVs."""
 from __future__ import annotations
 
 import argparse
@@ -38,12 +19,7 @@ _DEFAULT_ALPHA = 0.05
 
 
 def _mcnemar_stat(b: int, c: int) -> tuple[float, float]:
-    """
-    McNemar test (with continuity correction).
-    b = adaptive correct, static wrong
-    c = static correct, adaptive wrong
-    Returns (chi2_stat, p_value).
-    """
+    """McNemar test with continuity correction; returns (chi2_stat, p_value)."""
     if b + c == 0:
         return 0.0, 1.0
     stat = (abs(b - c) - 1) ** 2 / (b + c)
@@ -68,11 +44,10 @@ def _run_mcnemar(path: Path) -> dict | None:
     correct_s = (ys == y)
     correct_a = (ya == y)
 
-    # McNemar contingency cells
-    n00 = int(np.sum(~correct_s & ~correct_a))   # both wrong
-    n01 = int(np.sum(~correct_s &  correct_a))   # only adaptive correct  (b)
-    n10 = int(np.sum( correct_s & ~correct_a))   # only static correct    (c)
-    n11 = int(np.sum( correct_s &  correct_a))   # both correct
+    n00 = int(np.sum(~correct_s & ~correct_a))
+    n01 = int(np.sum(~correct_s &  correct_a))
+    n10 = int(np.sum( correct_s & ~correct_a))
+    n11 = int(np.sum( correct_s &  correct_a))
 
     stat, p = _mcnemar_stat(n01, n10)
 
@@ -91,10 +66,7 @@ def _run_mcnemar(path: Path) -> dict | None:
 
 
 def _parse_stem(stem: str) -> tuple[str, str, str]:
-    """
-    Parse 'daily_monitoring_AAPL_covid_ks_psi_js_ph' into
-    (ticker='AAPL', period='covid', combo='ks_psi_js_ph').
-    """
+    """Parse daily_monitoring stem into (ticker, period, combo)."""
     body = stem.replace("daily_monitoring_", "")
     parts = body.split("_")
     ticker = parts[0]
@@ -132,7 +104,6 @@ def run_ablation_mcnemar(
 
     df = pd.DataFrame(records)
 
-    # Bonferroni correction
     n_tests = len(df)
     bonferroni_alpha = alpha / n_tests
     df["p_bonferroni"] = (df["p_value"] * n_tests).clip(upper=1.0).round(6)
@@ -148,7 +119,6 @@ def run_ablation_mcnemar(
     df.to_csv(csv_per_run, index=False)
     print(f"Saved: {csv_per_run}  ({len(df)} rows)")
 
-    # ── Headline counts ────────────────────────────────────────────────────────
     vc = df["verdict"].value_counts()
     vc_bonf = df["verdict_bonf"].value_counts()
     total = len(df)
@@ -160,7 +130,6 @@ def run_ablation_mcnemar(
     print(f"  Adaptive wins : {vc_bonf.get('adaptive_wins', 0):>5}  ({100*vc_bonf.get('adaptive_wins',0)/total:.1f}%)")
     print(f"  Static wins   : {vc_bonf.get('static_wins',  0):>5}  ({100*vc_bonf.get('static_wins', 0)/total:.1f}%)")
 
-    # ── Combo-level breakdown ──────────────────────────────────────────────────
     combo_summary = (
         df.groupby("combo")
         .agg(
@@ -199,7 +168,6 @@ def _plot_mcnemar(df: pd.DataFrame, path: str, alpha: float) -> None:
 
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-        # ── Left: volcano plot (acc_delta vs -log10 p) ────────────────────────
         ax = axes[0]
         colours = {
             "adaptive_wins": "#1a9641",
@@ -218,10 +186,8 @@ def _plot_mcnemar(df: pd.DataFrame, path: str, alpha: float) -> None:
         ax.set_title("McNemar volcano plot")
         ax.legend(fontsize=8)
 
-        # ── Right: bar chart of win/neutral/loss by combo ─────────────────────
         ax2 = axes[1]
         combo_counts = df.groupby(["combo", "verdict"]).size().unstack(fill_value=0)
-        # Keep top 12 combos by n_runs
         top_combos = df["combo"].value_counts().head(12).index
         combo_counts = combo_counts.reindex(top_combos).fillna(0)
         combo_counts = combo_counts.reindex(

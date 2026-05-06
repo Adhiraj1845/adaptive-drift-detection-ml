@@ -163,7 +163,7 @@ def calibrate_from_baseline(
     X_cal_scaled = _scale(cal_scaler, train_df[features].replace([np.inf, -np.inf], np.nan).fillna(0.0))
     cal_model.train(X_cal_scaled, train_df["Target"])
 
-    # Batch all predictions up front — avoids 2500 sequential single-row RF calls
+    # batch predictions up front — avoids 2500 sequential single-row RF calls
     cal_proba = cal_model.predict_proba(X_cal_scaled)
     cal_p1_all = cal_proba[:, 1].tolist() if cal_proba is not None else [
         float(cal_model.predict(X_cal_scaled.iloc[[i]])[0]) for i in range(len(X_cal_scaled))
@@ -181,7 +181,7 @@ def calibrate_from_baseline(
         if len(pred_cur_window) > window_size:
             pred_cur_window.pop(0)
 
-        if len(pred_ref_window) < window_size:  # fill ref with first window_size predictions
+        if len(pred_ref_window) < window_size:
             pred_ref_window.append(float(p1))
 
         for f in monitor_features:
@@ -309,9 +309,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     static_model.train(X_train_scaled, train_df["Target"])
     print("[6/10] Static model trained.", flush=True)
 
-    # Precompute static model probabilities for ALL rows in df so the adaptive
-    # model can use the static prediction as a feature — this is the "error correction"
-    # signal: the adaptive model learns when to agree/disagree with static.
+    # static prediction added as feature so adaptive can learn when to override it
     _all_X_scaled = _scale(static_scaler, df[features].replace([np.inf, -np.inf], np.nan).fillna(0.0))
     _all_proba = static_model.predict_proba(_all_X_scaled)
     df["_p1s"] = _all_proba[:, 1] if _all_proba is not None else 0.5
@@ -319,8 +317,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     stream_df = stream_df.copy()
     stream_df["_p1s"] = df["_p1s"].reindex(stream_df.index).fillna(0.5).values
 
-    # Adaptive model uses extra feature: static model's predicted probability.
-    # This lets it learn "when static says up but conditions suggest down, override."
     adaptive_features = features + ["_p1s"]
     adaptive_scaler = _fit_scaler(train_df[adaptive_features].replace([np.inf, -np.inf], np.nan).fillna(0.0))
     adaptive_model.train(
@@ -329,7 +325,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     )
     print("[6/10] Adaptive model trained with static-correction feature.", flush=True)
 
-    # ── Online incremental model (optional) ───────────────────────────────────
     _use_sgd = bool(getattr(cfg, "use_sgd_online", True))
     _use_scheduled_retrain = bool(getattr(cfg, "use_scheduled_retrain", True))
     _use_error_rate_trigger = bool(getattr(cfg, "use_error_rate_trigger", True))
@@ -420,44 +415,30 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     pred_ref_window: list[float] = []
     pred_cur_window: list[float] = []
 
-    # Track recent accuracy for:
-    #   1) error-rate retraining trigger (force retrain when static failing)
-    #   2) performance-gated switching (use raw adaptive accuracy, not switched output)
-    static_recent:       list[int] = []  # static model correct/wrong
-    adaptive_raw_recent: list[int] = []  # raw adaptive model correct/wrong (pre-switch)
+    static_recent:       list[int] = []
+    adaptive_raw_recent: list[int] = []
 
-    # Rolling 10-day buffers of raw predictions for position-sizing smoothing.
-    # Using the average of recent predictions (rather than today's single value)
-    # prevents daily whipsaw and makes the equity curve track multi-day trends.
-    p1_static_pos_buf:  list[float] = []  # recent static raw probabilities
-    p1_adapt_pos_buf:   list[float] = []  # recent adaptive raw probabilities
-    _POS_SMOOTH = 10    # days over which to smooth position signal
+    p1_static_pos_buf:  list[float] = []
+    p1_adapt_pos_buf:   list[float] = []
+    _POS_SMOOTH = 10
 
-    # Adaptive baseline: starts at 0.5, tracks recent model accuracy via slow EMA.
-    # When adaptive has been accurate recently → baseline rises → more invested.
-    # When adaptive has been wrong → baseline falls → reduce exposure.
-    # Static always uses a fixed 0.5 baseline (it never learns, so it never earns higher trust).
     adaptive_baseline: float = 0.7
-    _BASELINE_EMA = 0.05   # ~20-day effective window
+    _BASELINE_EMA = 0.05
 
-    # ── Drift-gated adaptive blend ─────────────────────────────────────────────
-    drift_ema: float = 0.0          # EMA of drift_index (~10-day window)
-    perf_advantage_ema: float = 0.0 # EMA of adapt_correct − static_correct (~10-day)
-    _DRIFT_EMA_ALPHA:  float = 0.10  # α for drift EMA
-    _PERF_EMA_ALPHA:   float = 0.10  # α for performance advantage EMA (~10-day)
-    _SGD_WEIGHT: float = 0.15        # base SGD fraction in adaptive blend
-    # Previous-day predictions for 1-day-lag performance update (no lookahead)
+    drift_ema: float = 0.0
+    perf_advantage_ema: float = 0.0
+    _DRIFT_EMA_ALPHA:  float = 0.10
+    _PERF_EMA_ALPHA:   float = 0.10
+    _SGD_WEIGHT: float = 0.15
     prev_p1_static_h: float | None = None
     prev_p1_gbm_h:    float | None = None
     prev_p1_sgd_h:    float | None = None
     prev_p1_adapt_h:  float | None = None
 
-    # ── Dynamic conviction scaling ─────────────────────────────────────────────
-    # Static and adaptive use SEPARATE accuracy EMAs so a bad SGD patch doesn't
-    # shrink static positions.  Each model earns its own conviction level.
-    ensemble_ema_acc: float = 0.5   # adaptive blend accuracy EMA
-    static_ema_acc:   float = 0.5   # static model accuracy EMA (independent)
-    _CONV_EMA: float = 0.10    # α≈0.10 → ~10-day effective window (responsive)
+    # separate EMAs so a bad SGD patch doesn't shrink static positions
+    ensemble_ema_acc: float = 0.5
+    static_ema_acc:   float = 0.5
+    _CONV_EMA: float = 0.10
 
     daily_rows: list[dict] = []
     event_rows: list[dict] = []
@@ -485,7 +466,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
 
     print(f"[8/10] Streaming loop start ({cfg.eval_start} to {cfg.eval_end})...", flush=True)
 
-    # Pre-batch all static predictions — static model never retrains so this is safe
+    # static never retrains so safe to batch all predictions upfront
     X_stream_s_all = _scale(static_scaler, stream_df[features].replace([np.inf, -np.inf], np.nan).fillna(0.0))
     _static_proba_all = static_model.predict_proba(X_stream_s_all)
     p1_static_all = _static_proba_all[:, 1].tolist() if _static_proba_all is not None else None
@@ -497,15 +478,12 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
 
         p1_static = float(p1_static_all[stream_idx]) if p1_static_all is not None else _safe_proba_one(static_model, _scale(static_scaler, x_t_raw))
 
-        # Build the extended feature vector (includes static prediction as a feature)
         x_t_a_full = x_t_raw.copy()
         x_t_a_full["_p1s"] = p1_static
         x_t_feat = x_t_a_full[adaptive_features].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
-        # ── GBM adaptive prediction ───────────────────────────────────────────
         p1_gbm = _safe_proba_one(adaptive_model, _scale(adaptive_scaler, x_t_feat))
 
-        # ── Online SGD prediction + daily update ──────────────────────────────
         if _use_sgd:
             x_t_online = _scale(online_scaler, x_t_feat).values
             if online_prev_x is not None:
@@ -515,10 +493,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         else:
             p1_sgd = p1_gbm  # unused in blend when SGD is off
 
-        # ── Drift-gated weight (1-day lag) ────────────────────────────────────
-        # Compute w_adapt: used at POSITION SIZING level only (not blended into
-        # the prediction signal).  This keeps p1_adapt purely adaptive so that
-        # McNemar / AUC tests compare genuinely different models.
+        # w_adapt used only for position sizing, not blended into p1_adapt (keeps McNemar clean)
         if prev_p1_static_h is not None and prev_p1_adapt_h is not None and online_prev_y is not None:
             was_static_right = int((prev_p1_static_h >= 0.5) == bool(online_prev_y))
             was_adapt_right  = int((prev_p1_adapt_h  >= 0.5) == bool(online_prev_y))  # full blend
@@ -533,7 +508,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         gate = 0.60 * drift_signal + 0.40 * perf_signal
         w_adapt = float(np.clip(gate, 0.25, 0.90))
 
-        # ── Adaptive signal blend ──────────────────────────────────────────────
         if _use_sgd:
             online_weight = float(min(_SGD_WEIGHT + 0.40 * drift_signal, 0.60))
             if online_n_updates < 20:
@@ -548,11 +522,9 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         y_pred_static = 1 if p1_static >= 0.5 else 0
         y_pred_adapt  = 1 if p1_adapt  >= 0.5 else 0
 
-        # Store for next iteration's online update and accuracy tracking
         if _use_sgd:
             online_prev_x = x_t_online.reshape(1, -1)
         online_prev_y = y_t
-        # Store today's predictions for next-day performance advantage update (1-day lag)
         prev_p1_static_h = p1_static
         prev_p1_gbm_h    = p1_gbm
         prev_p1_sgd_h    = p1_sgd
@@ -565,7 +537,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
             adaptive_raw_recent.pop(0)
 
         ll_static = log_loss_binary(y_t, p1_static)
-        ll_adapt = log_loss_binary(y_t, p1_adapt_raw)   # raw model quality
+        ll_adapt = log_loss_binary(y_t, p1_adapt_raw)
         br_static = brier_binary(y_t, p1_static)
         br_adapt = brier_binary(y_t, p1_adapt_raw)
 
@@ -607,23 +579,17 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
             prediction_score = float(controller.prediction_drift_score(pred_ref_window, pred_cur_window))
 
         raw_ph = float(controller.performance_drift_score(float(ll_adapt)))
-        performance_score = float(min(raw_ph / 10.0, 1.0))  # 10.0 = 2 * PH threshold
+        performance_score = float(min(raw_ph / 10.0, 1.0))  # normalise: threshold=5 → max raw=10
 
         drift_index = float(controller.compute_drift_index(feature_score, prediction_score, performance_score))
         action = controller.decide_action(drift_index)
-        # Update drift EMA for next iteration's gate computation (1-day lag, no lookahead)
         drift_ema = _DRIFT_EMA_ALPHA * drift_index + (1.0 - _DRIFT_EMA_ALPHA) * drift_ema
 
-        # Error-rate trigger: if static has been wrong >55% of last 30 days, the
-        # adaptive model should retrain even if no distribution drift is detected.
         if _use_error_rate_trigger and action == "none" and len(static_recent) >= 20:
             static_acc = float(np.mean(static_recent))
             if static_acc < 0.45:
                 action = "moderate"
 
-        # Build smoothed position signals (10-day rolling mean of raw probabilities).
-        # Decouples classification accuracy (raw p1) from equity smoothness (trend p1).
-        # Effect: model must be consistently bullish for ~10 days before reaching full position.
         p1_static_pos_buf.append(p1_static)
         if len(p1_static_pos_buf) > _POS_SMOOTH:
             p1_static_pos_buf.pop(0)
@@ -634,21 +600,13 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         p1_s_smooth = float(np.mean(p1_static_pos_buf))
         p1_a_smooth = float(np.mean(p1_adapt_pos_buf))
 
-        # Update adaptive baseline via slow EMA of recent accuracy.
-        # baseline = 0.5 + 2*(recent_acc - 0.5), clamped to [0.30, 0.75].
-        # Effect: 40% acc → baseline 0.30 (cautious), 50% → 0.50 (neutral), 60% → 0.70 (confident).
-        # Static keeps a fixed 0.5 baseline — it never earns higher trust.
         if len(adaptive_raw_recent) >= 10:
             recent_acc = float(np.mean(adaptive_raw_recent))
             target_bl  = float(np.clip(0.65 + 2.5 * (recent_acc - 0.5), 0.60, 0.95))
             adaptive_baseline = _BASELINE_EMA * target_bl + (1.0 - _BASELINE_EMA) * adaptive_baseline
 
-        # Update accuracy EMAs using yesterday's predictions (1-day lag, no lookahead).
-        # Static and adaptive are tracked INDEPENDENTLY — a bad SGD patch must not
-        # shrink static positions (that was causing the Sharpe regression on GSPC/GLD).
         if prev_p1_static_h is not None and prev_p1_adapt_h is not None and online_prev_y is not None:
             static_ema_acc   = _CONV_EMA * float(int((prev_p1_static_h >= 0.5) == bool(online_prev_y))) + (1.0 - _CONV_EMA) * static_ema_acc
-            # Use the stored full-blend prediction (prev_p1_adapt_h) — no stale weight re-computation.
             ensemble_ema_acc = _CONV_EMA * float(int((prev_p1_adapt_h  >= 0.5) == bool(online_prev_y))) + (1.0 - _CONV_EMA) * ensemble_ema_acc
 
         conviction_scale_s = float(np.clip(4.0 + 15.0 * (static_ema_acc   - 0.45), 4.0, 12.0))
@@ -656,15 +614,12 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         conviction_s = float(np.clip(conviction_scale_s * (p1_s_smooth - 0.5), -1.0, 1.0))
         conviction_a = float(np.clip(conviction_scale_a * (p1_a_smooth - 0.5), -1.0, 1.0))
 
-        # Static: original signal-only formula — no floor.  A frozen model that is
-        # uncertain in the new regime (p1 ≈ 0.5) naturally goes to cash → flat line.
         pos_long_static_raw = float(np.clip(2.0 * (p1_s_smooth - 0.5), 0.0, 1.0))
         pos_long_adapt_raw  = float(np.clip(adaptive_baseline + conviction_a, 0.0, 1.0))
         pos_ls_static_raw   = float(np.clip(conviction_s, -1.0, 1.0))
         pos_ls_adapt_raw    = float(np.clip(conviction_a, -1.0, 1.0))
 
         pos_long_static = pos_long_static_raw
-        # Adaptive uses its own signal independently — no blending toward near-zero static.
         pos_long_adapt  = pos_long_adapt_raw
         pos_ls_static   = pos_ls_static_raw
         pos_ls_adapt    = w_adapt * pos_ls_adapt_raw    + (1.0 - w_adapt) * pos_ls_static_raw
@@ -697,8 +652,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                 if len(retrain_df) >= 2:
                     retrain_df = retrain_df.iloc[:-1]
 
-                # Focus on the recent regime — cap rows per tier so the model
-                # isn't contaminated by stale market conditions from years ago.
                 if action == "moderate":
                     retrain_df = retrain_df.tail(252)   # ~1 year
                 elif action == "high":
@@ -709,7 +662,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                     old_adaptive_model = adaptive_model
                     old_adaptive_scaler = adaptive_scaler
 
-                    # Retrain with the full adaptive feature set (includes _p1s)
                     retrain_feat_df = retrain_df[adaptive_features].replace([np.inf, -np.inf], np.nan).fillna(0.0)
                     adaptive_scaler = _fit_scaler(retrain_feat_df)
                     X_retrain = _scale(adaptive_scaler, retrain_feat_df)
@@ -733,8 +685,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                         adaptive_model.train(X_retrain, retrain_df["Target"], sample_weight=drift_w)
                         retrained = True
 
-                    # OOS validation: compare old vs new on most recent eval rows
-                    # (data neither model was trained on — true out-of-sample).
                     if retrained and len(daily_rows) >= 20:
                         try:
                             val_rows_data = daily_rows[-20:]
@@ -742,7 +692,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                             val_stream = stream_df.loc[val_dates]
                             val_X = val_stream[adaptive_features].replace([np.inf, -np.inf], np.nan).fillna(0.0)
                             val_y = val_stream["Target"].astype(int).values
-                            # Batch predict both models at once
                             old_p_batch = old_adaptive_model.predict_proba(_scale(old_adaptive_scaler, val_X))
                             new_p_batch = adaptive_model.predict_proba(_scale(adaptive_scaler, val_X))
                             if old_p_batch is not None and new_p_batch is not None:
@@ -771,19 +720,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                             ph.reset()
                         pred_ref_window = pred_cur_window[:] if len(pred_cur_window) == window_size else pred_ref_window[:]
 
-        # ── Scheduled periodic retraining (optional) ──────────────────────────
-        # Every 20 trading days retrain on a ROLLING 1-year window ending today.
-        # This keeps the model current with the actual market regime without
-        # accumulating stale patterns from old regimes (e.g. 2021 bull carrying
-        # into 2022 bear).  As time advances the window shifts forward, so recent
-        # eval observations naturally replace old pre-eval data.
         if _use_scheduled_retrain and not retrained and stream_idx > 0 and stream_idx % 10 == 0:
-            # Growing window: all available data from train_start to yesterday,
-            # capped at 500 rows for GBM speed.  Exponential decay weights
-            # (half-life ≈ 200 trading days) ensure the current market regime
-            # dominates while old data still provides structural context.
-            # As eval progresses the window increasingly contains real eval
-            # observations — the GBM sees more of the actual market it predicts.
             grow_all = df.loc[train_start:dt].dropna()
             if len(grow_all) >= 2:
                 grow_all = grow_all.iloc[:-1]
@@ -833,10 +770,7 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
                 "y_pred_static": y_pred_static,
                 "y_pred_adaptive": y_pred_adapt,
                 "p1_static": p1_static,
-                # Store raw (un-blended) adaptive probability for AUC/logloss evaluation.
-                # y_pred_adaptive uses the gated p1_adapt for better accuracy; p1_adaptive
-                # uses p1_adapt_raw for unbiased probability calibration.
-                "p1_adaptive": p1_adapt_raw,
+                "p1_adaptive": p1_adapt_raw,  # raw (un-blended) for unbiased calibration metrics
                 "logloss_static": ll_static,
                 "logloss_adaptive": log_loss_binary(y_t, p1_adapt_raw),
                 "brier_static": br_static,
@@ -963,8 +897,6 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     maxdd_static     = max_drawdown(eq_s)    if len(eq_s)    > 1 else float("nan")
     maxdd_adaptive   = max_drawdown(eq_a)    if len(eq_a)    > 1 else float("nan")
 
-    # Correlation: drift index vs |next-day market return| — does detector
-    # fire when the market is actually moving?
     drift_indices = [r["drift_index"] for r in daily_rows]
     abs_market_ret = list(np.abs(ret_m)) if len(ret_m) > 0 else []
     min_len = min(len(drift_indices), len(abs_market_ret))
@@ -973,13 +905,11 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
     else:
         drift_vol_corr = float("nan")
 
-    # Mean log-loss and Brier score: adaptive vs static
     mean_ll_static   = float(np.mean(loss_static_all))   if loss_static_all   else float("nan")
     mean_ll_adaptive = float(np.mean(loss_adapt_all))    if loss_adapt_all    else float("nan")
     mean_br_static   = float(np.mean(brier_static_all))  if brier_static_all  else float("nan")
     mean_br_adaptive = float(np.mean(brier_adapt_all))   if brier_adapt_all   else float("nan")
 
-    # Retrains actually executed (action != none AND not cooldown-blocked)
     n_retrains = int(sum(r.get("retrained_today", 0) for r in daily_rows))
 
     return {
@@ -998,17 +928,15 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         "use_scheduled_retrain": getattr(cfg, "use_scheduled_retrain", True),
         "use_error_rate_trigger":getattr(cfg, "use_error_rate_trigger",True),
         "n_eval_days":          n,
-        # Classification
         "acc_static":           acc_static,
         "acc_adaptive":         acc_adaptive,
         "acc_delta":            acc_adaptive - acc_static,
         "mean_logloss_static":  mean_ll_static,
         "mean_logloss_adaptive":mean_ll_adaptive,
-        "logloss_delta":        mean_ll_static - mean_ll_adaptive,   # positive = adaptive better
+        "logloss_delta":        mean_ll_static - mean_ll_adaptive,
         "mean_brier_static":    mean_br_static,
         "mean_brier_adaptive":  mean_br_adaptive,
-        "brier_delta":          mean_br_static - mean_br_adaptive,   # positive = adaptive better
-        # Long-only economics
+        "brier_delta":          mean_br_static - mean_br_adaptive,
         "sharpe_static":        sharpe_static,
         "sharpe_adaptive":      sharpe_adaptive,
         "sharpe_delta":         sharpe_adaptive - sharpe_static,
@@ -1017,14 +945,12 @@ def run_pipeline(cfg, _quiet: bool = False, _window_size: int = 100, _cooldown_d
         "cagr_market":          cagr_market,
         "maxdd_static":         maxdd_static,
         "maxdd_adaptive":       maxdd_adaptive,
-        # Long-short economics
         "sharpe_ls_static":     sharpe_ls_static,
         "sharpe_ls_adaptive":   sharpe_ls_adaptive,
         "sharpe_ls_delta":      sharpe_ls_adaptive - sharpe_ls_static,
-        # Drift behaviour
         "n_drift_events":       len(event_rows),
         "n_retrains":           n_retrains,
-        "drift_vol_corr":       drift_vol_corr,   # corr(drift_index, |market_ret|)
+        "drift_vol_corr":       drift_vol_corr,
         "elapsed_s":            round(time.time() - t0, 1),
     }
 

@@ -1,27 +1,4 @@
-"""
-Hyperparameter sensitivity analysis.
-
-Tests robustness of results to the two most important pipeline parameters:
-  window_size   — rolling window for drift detection (default 100)
-  cooldown_days — minimum days between retrains     (default 5)
-
-Runs a grid of 5×5 = 25 parameter combinations on 8 representative tickers
-(spanning crypto, US equity, US index, bonds) across 2 eval periods.
-Total: 8 tickers × 2 periods × 25 combos = 400 runs (~15-20 min).
-
-If acc_delta and sharpe_delta are stable across the grid, the results
-are robust to hyperparameter choice — a key validation requirement.
-
-Output
-------
-  results/sensitivity_analysis.csv       -- per-run grid results
-  results/sensitivity_charts.png         -- heatmaps + stability plots
-
-Usage
------
-    python -m src.experiments.sensitivity_analysis
-    python -m src.experiments.sensitivity_analysis --tickers AAPL BTC-USD --periods std
-"""
+"""Hyperparameter sensitivity: window_size × cooldown_days grid across representative tickers."""
 from __future__ import annotations
 
 import argparse

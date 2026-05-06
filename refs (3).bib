@@ -1,0 +1,842 @@
+% ============================================================
+%  refs.bib
+%  Complete bibliography for:
+%  "Adaptive Drift Detection for Financial Time Series Classification"
+%  COMP3931 Individual Project — Adhiraj Kumar — 2025/26
+%  72 entries
+% ============================================================
+
+% ── 1. CONCEPT DRIFT — SURVEYS AND TAXONOMY ─────────────────
+
+@article{widmer1996,
+  author    = {Widmer, Gerhard and Kubat, Miroslav},
+  title     = {Learning in the Presence of Concept Drift and Hidden Contexts},
+  journal   = {Machine Learning},
+  volume    = {23},
+  number    = {1},
+  pages     = {69--101},
+  year      = {1996},
+  doi       = {10.1007/BF00116900}
+}
+
+@techreport{tsymbal2004,
+  author      = {Tsymbal, Alexey},
+  title       = {The Problem of Concept Drift: Definitions and Related Work},
+  institution = {Department of Computer Science, Trinity College Dublin},
+  number      = {TCD-CS-2004-15},
+  year        = {2004}
+}
+
+@article{gama2014survey,
+  author    = {Gama, Jo{\~a}o and {\v{Z}}liobait{\.e}, Indr{\.e} and Bifet, Albert
+               and Pechenizkiy, Mykola and Bouchachia, Abdelhamid},
+  title     = {A Survey on Concept Drift Adaptation},
+  journal   = {ACM Computing Surveys},
+  volume    = {46},
+  number    = {4},
+  pages     = {44:1--44:37},
+  year      = {2014},
+  doi       = {10.1145/2523813}
+}
+
+@article{lu2019review,
+  author    = {Lu, Jie and Liu, Anjin and Dong, Fan and Gu, Feng and
+               Gama, Jo{\~a}o and Zhang, Guangquan},
+  title     = {Learning under Concept Drift: A Review},
+  journal   = {IEEE Transactions on Knowledge and Data Engineering},
+  volume    = {31},
+  number    = {12},
+  pages     = {2346--2363},
+  year      = {2019},
+  doi       = {10.1109/TKDE.2018.2876857}
+}
+
+@misc{zliobaite2010,
+  author        = {{\v{Z}}liobait{\.e}, Indr{\.e}},
+  title         = {Learning under Concept Drift: An Overview},
+  year          = {2010},
+  howpublished  = {arXiv:1010.4784},
+  url           = {https://arxiv.org/abs/1010.4784}
+}
+
+@article{webb2016,
+  author    = {Webb, Geoffrey I. and Hyde, Roy and Cao, Hong and
+               Nguyen, Hai Long and Petitjean, Francois},
+  title     = {Characterizing Concept Drift},
+  journal   = {Data Mining and Knowledge Discovery},
+  volume    = {30},
+  number    = {4},
+  pages     = {964--994},
+  year      = {2016},
+  doi       = {10.1007/s10618-015-0448-4}
+}
+
+% ── 2. DRIFT DETECTORS ──────────────────────────────────────
+
+@article{kolmogorov1933,
+  author  = {Kolmogorov, Andrei N.},
+  title   = {Sulla Determinazione Empirica di una Legge di Distribuzione},
+  journal = {Giornale dell'Istituto Italiano degli Attuari},
+  volume  = {4},
+  pages   = {83--91},
+  year    = {1933}
+}
+
+@article{smirnov1948,
+  author  = {Smirnov, Nikolai},
+  title   = {Table for Estimating the Goodness of Fit of Empirical Distributions},
+  journal = {Annals of Mathematical Statistics},
+  volume  = {19},
+  number  = {2},
+  pages   = {279--281},
+  year    = {1948},
+  doi     = {10.1214/aoms/1177730256}
+}
+
+@article{page1954,
+  author  = {Page, Ewan S.},
+  title   = {Continuous Inspection Schemes},
+  journal = {Biometrika},
+  volume  = {41},
+  number  = {1--2},
+  pages   = {100--115},
+  year    = {1954},
+  doi     = {10.1093/biomet/41.1-2.100}
+}
+
+@inproceedings{mouss2004,
+  author    = {Mouss, Hayet and Mouss, Djamel and Mouss, Nadia and Sefouhi, Leila},
+  title     = {Test of {Page}-{Hinkley}, an Approach for Fault Detection in an
+               Agro-Alimentary Production System},
+  booktitle = {Proceedings of the 5th Asian Control Conference},
+  pages     = {815--818},
+  year      = {2004}
+}
+
+@article{shannon1948,
+  author  = {Shannon, Claude E.},
+  title   = {A Mathematical Theory of Communication},
+  journal = {Bell System Technical Journal},
+  volume  = {27},
+  number  = {3},
+  pages   = {379--423},
+  year    = {1948},
+  doi     = {10.1002/j.1538-7305.1948.tb01338.x}
+}
+
+@article{kullback1951,
+  author  = {Kullback, Solomon and Leibler, Richard A.},
+  title   = {On Information and Sufficiency},
+  journal = {Annals of Mathematical Statistics},
+  volume  = {22},
+  number  = {1},
+  pages   = {79--86},
+  year    = {1951},
+  doi     = {10.1214/aoms/1177729694}
+}
+
+@article{lin1991,
+  author  = {Lin, Jianhua},
+  title   = {Divergence Measures Based on the {Shannon} Entropy},
+  journal = {IEEE Transactions on Information Theory},
+  volume  = {37},
+  number  = {1},
+  pages   = {145--151},
+  year    = {1991},
+  doi     = {10.1109/18.61115}
+}
+
+@inproceedings{bifet2007adwin,
+  author    = {Bifet, Albert and Gavald{\`a}, Ricard},
+  title     = {Learning from Time-Changing Data with Adaptive Windowing},
+  booktitle = {Proceedings of the 2007 SIAM International Conference on Data Mining},
+  pages     = {443--448},
+  year      = {2007},
+  doi       = {10.1137/1.9781611972771.42}
+}
+
+@inproceedings{gama2004ddm,
+  author    = {Gama, Jo{\~a}o and Medas, Pedro and Castillo, Gladys and Rodrigues, Pedro},
+  title     = {Learning with Drift Detection},
+  booktitle = {Proceedings of the 17th Brazilian Symposium on Artificial Intelligence
+               (SBIA 2004)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {3171},
+  pages     = {286--295},
+  year      = {2004},
+  doi       = {10.1007/978-3-540-28645-5_29}
+}
+
+@inproceedings{baenagarcia2006eddm,
+  author    = {Baena-Garc{\'i}a, Manuel and del Campo-{\'A}vila, Jos{\'e} and
+               Fidalgo, Ra{\'u}l and Bifet, Albert and Gavald{\`a}, Ricard and
+               Morales-Bueno, Rafael},
+  title     = {Early Drift Detection Method},
+  booktitle = {Proceedings of the 4th International Workshop on Knowledge Discovery
+               from Data Streams (ECML/PKDD)},
+  pages     = {77--86},
+  year      = {2006}
+}
+
+@inproceedings{kifer2004,
+  author    = {Kifer, Daniel and Ben-David, Shai and Gehrke, Johannes},
+  title     = {Detecting Change in Data Streams},
+  booktitle = {Proceedings of the 30th International Conference on Very Large
+               Data Bases (VLDB)},
+  pages     = {180--191},
+  year      = {2004},
+  doi       = {10.5555/1316689.1316707}
+}
+
+@inproceedings{rabanser2019,
+  author    = {Rabanser, Stephan and G{\"u}nnemann, Stephan and Lipton, Zachary C.},
+  title     = {Failing Loudly: An Empirical Study of Methods for Detecting Dataset Shift},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {32},
+  year      = {2019}
+}
+
+@inproceedings{nishida2007,
+  author    = {Nishida, Kyosuke and Yamauchi, Koichiro},
+  title     = {Detecting Concept Drift Using Statistical Testing},
+  booktitle = {Proceedings of the 10th International Conference on Discovery Science},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {4755},
+  pages     = {264--269},
+  year      = {2007},
+  doi       = {10.1007/978-3-540-75488-6_27}
+}
+
+% ── 3. PSI AND CREDIT RISK MONITORING ───────────────────────
+
+@book{siddiqi2006,
+  author    = {Siddiqi, Naeem},
+  title     = {Credit Risk Scorecards: Developing and Implementing Intelligent
+               Credit Scoring},
+  publisher = {John Wiley \& Sons},
+  address   = {Hoboken, NJ},
+  year      = {2006}
+}
+
+@techreport{basel2005,
+  author      = {{Basel Committee on Banking Supervision}},
+  title       = {Studies on the Validation of Internal Rating Systems},
+  institution = {Bank for International Settlements},
+  number      = {Working Paper No.\ 14},
+  year        = {2005},
+  url         = {https://www.bis.org/publ/bcbs_wp14.pdf}
+}
+
+% ── 4. ONLINE AND ADAPTIVE LEARNING ─────────────────────────
+
+@incollection{bottou1998,
+  author    = {Bottou, L{\'e}on},
+  title     = {Online Learning and Stochastic Approximations},
+  booktitle = {On-Line Learning in Neural Networks},
+  editor    = {Saad, David},
+  pages     = {9--42},
+  publisher = {Cambridge University Press},
+  year      = {1998}
+}
+
+@article{herbster1998,
+  author  = {Herbster, Mark and Warmuth, Manfred K.},
+  title   = {Tracking the Best Expert},
+  journal = {Machine Learning},
+  volume  = {32},
+  number  = {2},
+  pages   = {151--178},
+  year    = {1998},
+  doi     = {10.1023/A:1007424614876}
+}
+
+@inproceedings{klinkenberg2000,
+  author    = {Klinkenberg, Ralf and Joachims, Thorsten},
+  title     = {Detecting Concept Drift with Support Vector Machines},
+  booktitle = {Proceedings of the 17th International Conference on Machine Learning
+               (ICML)},
+  pages     = {487--494},
+  year      = {2000}
+}
+
+@article{losing2018,
+  author  = {Losing, Viktor and Hammer, Barbara and Wersing, Heiko},
+  title   = {Incremental On-Line Learning: A Review and Comparison of State of the
+             Art Algorithms},
+  journal = {Neurocomputing},
+  volume  = {275},
+  pages   = {1261--1274},
+  year    = {2018},
+  doi     = {10.1016/j.neucom.2017.06.084}
+}
+
+@article{bifet2010moa,
+  author  = {Bifet, Albert and Holmes, Geoff and Kirkby, Richard and
+             Pfahringer, Bernhard},
+  title   = {{MOA}: Massive Online Analysis},
+  journal = {Journal of Machine Learning Research},
+  volume  = {11},
+  pages   = {1601--1604},
+  year    = {2010}
+}
+
+@article{gomes2017arf,
+  author  = {Gomes, Heitor Murilo and Bifet, Albert and Read, Jesse and
+             Barddal, Jean Paul and Enembreck, Fabricio and Pfharinger, Bernhard and
+             Holmes, Geoff and Abdessalem, Talel},
+  title   = {Adaptive Random Forests for Evolving Data Stream Classification},
+  journal = {Machine Learning},
+  volume  = {106},
+  number  = {9--10},
+  pages   = {1469--1495},
+  year    = {2017},
+  doi     = {10.1007/s10994-017-5642-8}
+}
+
+% ── 5. ENSEMBLE METHODS UNDER DRIFT ─────────────────────────
+
+@article{minku2012ddd,
+  author  = {Minku, Leandro L. and Yao, Xin},
+  title   = {{DDD}: A New Ensemble Approach for Dealing with Concept Drift},
+  journal = {IEEE Transactions on Knowledge and Data Engineering},
+  volume  = {24},
+  number  = {4},
+  pages   = {619--633},
+  year    = {2012},
+  doi     = {10.1109/TKDE.2011.58}
+}
+
+@article{kolter2007dwm,
+  author  = {Kolter, J. Zico and Maloof, Marcus A.},
+  title   = {Dynamic Weighted Majority: An Ensemble Method for Drifting Concepts},
+  journal = {Journal of Machine Learning Research},
+  volume  = {8},
+  pages   = {2755--2790},
+  year    = {2007}
+}
+
+@article{brzezinski2014,
+  author  = {Brzezinski, Dariusz and Stefanowski, Jerzy},
+  title   = {Reacting to Different Types of Concept Drift: The Accuracy Updated
+             Ensemble Algorithm},
+  journal = {IEEE Transactions on Neural Networks and Learning Systems},
+  volume  = {25},
+  number  = {1},
+  pages   = {81--94},
+  year    = {2014},
+  doi     = {10.1109/TNNLS.2013.2251352}
+}
+
+@inproceedings{street2001sea,
+  author    = {Street, W. Nick and Kim, YongSeog},
+  title     = {A Streaming Ensemble Algorithm ({SEA}) for Large-Scale Classification},
+  booktitle = {Proceedings of the 7th ACM SIGKDD International Conference on
+               Knowledge Discovery and Data Mining},
+  pages     = {377--382},
+  year      = {2001},
+  doi       = {10.1145/502512.502568}
+}
+
+% ── 6. FINANCIAL TIME SERIES AND REGIME SWITCHING ───────────
+
+@article{hamilton1989,
+  author  = {Hamilton, James D.},
+  title   = {A New Approach to the Economic Analysis of Nonstationary Time Series
+             and the Business Cycle},
+  journal = {Econometrica},
+  volume  = {57},
+  number  = {2},
+  pages   = {357--384},
+  year    = {1989},
+  doi     = {10.2307/1912559}
+}
+
+@article{ang2012regime,
+  author  = {Ang, Andrew and Timmermann, Allan},
+  title   = {Regime Changes and Financial Markets},
+  journal = {Annual Review of Financial Economics},
+  volume  = {4},
+  number  = {1},
+  pages   = {313--337},
+  year    = {2012},
+  doi     = {10.1146/annurev-financial-110311-101808}
+}
+
+@article{fama1970,
+  author  = {Fama, Eugene F.},
+  title   = {Efficient Capital Markets: A Review of Theory and Empirical Work},
+  journal = {Journal of Finance},
+  volume  = {25},
+  number  = {2},
+  pages   = {383--417},
+  year    = {1970},
+  doi     = {10.2307/2325486}
+}
+
+@article{fama1993,
+  author  = {Fama, Eugene F. and French, Kenneth R.},
+  title   = {Common Risk Factors in the Returns on Stocks and Bonds},
+  journal = {Journal of Financial Economics},
+  volume  = {33},
+  number  = {1},
+  pages   = {3--56},
+  year    = {1993},
+  doi     = {10.1016/0304-405X(93)90023-5}
+}
+
+@article{lo2004amh,
+  author  = {Lo, Andrew W.},
+  title   = {The Adaptive Markets Hypothesis},
+  journal = {Journal of Portfolio Management},
+  volume  = {30},
+  number  = {5},
+  pages   = {15--29},
+  year    = {2004},
+  doi     = {10.3905/jpm.2004.442611}
+}
+
+@article{engle1982,
+  author  = {Engle, Robert F.},
+  title   = {Autoregressive Conditional Heteroscedasticity with Estimates of the
+             Variance of {United Kingdom} Inflation},
+  journal = {Econometrica},
+  volume  = {50},
+  number  = {4},
+  pages   = {987--1007},
+  year    = {1982},
+  doi     = {10.2307/1912773}
+}
+
+@article{bollerslev1986,
+  author  = {Bollerslev, Tim},
+  title   = {Generalized Autoregressive Conditional Heteroskedasticity},
+  journal = {Journal of Econometrics},
+  volume  = {31},
+  number  = {3},
+  pages   = {307--327},
+  year    = {1986},
+  doi     = {10.1016/0304-4076(86)90063-1}
+}
+
+@incollection{rapach2013,
+  author    = {Rapach, David and Zhou, Guofu},
+  title     = {Forecasting Stock Returns},
+  booktitle = {Handbook of Economic Forecasting},
+  editor    = {Elliott, Graham and Timmermann, Allan},
+  volume    = {2A},
+  pages     = {328--383},
+  publisher = {Elsevier},
+  year      = {2013},
+  doi       = {10.1016/B978-0-444-53683-9.00006-2}
+}
+
+% ── 7. MACHINE LEARNING IN FINANCE ──────────────────────────
+
+@article{gu2020,
+  author  = {Gu, Shihao and Kelly, Bryan and Xiu, Dacheng},
+  title   = {Empirical Asset Pricing via Machine Learning},
+  journal = {Review of Financial Studies},
+  volume  = {33},
+  number  = {5},
+  pages   = {2223--2273},
+  year    = {2020},
+  doi     = {10.1093/rfs/hhaa009}
+}
+
+@article{fischer2018,
+  author  = {Fischer, Thomas and Krauss, Christopher},
+  title   = {Deep Learning with Long Short-Term Memory Networks for Financial
+             Market Predictions},
+  journal = {European Journal of Operational Research},
+  volume  = {270},
+  number  = {2},
+  pages   = {654--669},
+  year    = {2018},
+  doi     = {10.1016/j.ejor.2017.11.054}
+}
+
+@article{krauss2017,
+  author  = {Krauss, Christopher and Do, Xuan Anh and Huck, Nicolas},
+  title   = {Deep Neural Networks, Gradient-Boosted Trees, Random Forests:
+             Statistical Arbitrage on the {S\&P} 500},
+  journal = {European Journal of Operational Research},
+  volume  = {259},
+  number  = {2},
+  pages   = {689--702},
+  year    = {2017},
+  doi     = {10.1016/j.ejor.2016.10.031}
+}
+
+@article{patel2015,
+  author  = {Patel, Jigar and Shah, Sahil and Thakkar, Priyank and Kotecha, Ketan},
+  title   = {Predicting Stock and Stock Price Index Movement Using Trend Deterministic
+             Data Preparation and Machine Learning Techniques},
+  journal = {Expert Systems with Applications},
+  volume  = {42},
+  number  = {1},
+  pages   = {259--268},
+  year    = {2015},
+  doi     = {10.1016/j.eswa.2014.07.040}
+}
+
+@article{breiman2001,
+  author  = {Breiman, Leo},
+  title   = {Random Forests},
+  journal = {Machine Learning},
+  volume  = {45},
+  number  = {1},
+  pages   = {5--32},
+  year    = {2001},
+  doi     = {10.1023/A:1010933404324}
+}
+
+@article{friedman2001,
+  author  = {Friedman, Jerome H.},
+  title   = {Greedy Function Approximation: A Gradient Boosting Machine},
+  journal = {Annals of Statistics},
+  volume  = {29},
+  number  = {5},
+  pages   = {1189--1232},
+  year    = {2001},
+  doi     = {10.1214/aos/1013203451}
+}
+
+% ── 8. STATISTICAL METHODS ──────────────────────────────────
+
+@article{mcnemar1947,
+  author  = {McNemar, Quinn},
+  title   = {Note on the Sampling Error of the Difference between Correlated
+             Proportions or Percentages},
+  journal = {Psychometrika},
+  volume  = {12},
+  number  = {2},
+  pages   = {153--157},
+  year    = {1947},
+  doi     = {10.1007/BF02295996}
+}
+
+@article{white1980,
+  author  = {White, Halbert},
+  title   = {A Heteroskedasticity-Consistent Covariance Matrix Estimator and a
+             Direct Test for Heteroskedasticity},
+  journal = {Econometrica},
+  volume  = {48},
+  number  = {4},
+  pages   = {817--838},
+  year    = {1980},
+  doi     = {10.2307/1912934}
+}
+
+@article{efron1987,
+  author  = {Efron, Bradley},
+  title   = {Better Bootstrap Confidence Intervals},
+  journal = {Journal of the American Statistical Association},
+  volume  = {82},
+  number  = {397},
+  pages   = {171--185},
+  year    = {1987},
+  doi     = {10.2307/2289144}
+}
+
+@book{efron1993,
+  author    = {Efron, Bradley and Tibshirani, Robert J.},
+  title     = {An Introduction to the Bootstrap},
+  publisher = {Chapman \& Hall},
+  year      = {1993},
+  doi       = {10.1007/978-1-4899-4541-9}
+}
+
+@article{dietterich1998,
+  author  = {Dietterich, Thomas G.},
+  title   = {Approximate Statistical Tests for Comparing Supervised Classification
+             Learning Algorithms},
+  journal = {Neural Computation},
+  volume  = {10},
+  number  = {7},
+  pages   = {1895--1923},
+  year    = {1998},
+  doi     = {10.1162/089976698300017197}
+}
+
+@article{demsar2006,
+  author  = {Dem{\v{s}}ar, Janez},
+  title   = {Statistical Comparisons of Classifiers over Multiple Data Sets},
+  journal = {Journal of Machine Learning Research},
+  volume  = {7},
+  pages   = {1--30},
+  year    = {2006}
+}
+
+@article{dunn1961,
+  author  = {Dunn, Olive Jean},
+  title   = {Multiple Comparisons Among Means},
+  journal = {Journal of the American Statistical Association},
+  volume  = {56},
+  number  = {293},
+  pages   = {52--64},
+  year    = {1961},
+  doi     = {10.2307/2282330}
+}
+
+@article{kruskal1952,
+  author  = {Kruskal, William H. and Wallis, W. Allen},
+  title   = {Use of Ranks in One-Criterion Variance Analysis},
+  journal = {Journal of the American Statistical Association},
+  volume  = {47},
+  number  = {260},
+  pages   = {583--621},
+  year    = {1952},
+  doi     = {10.2307/2280779}
+}
+
+% ── 9. INFORMATION COEFFICIENT AND PORTFOLIO MANAGEMENT ─────
+
+@article{grinold1989,
+  author  = {Grinold, Richard C.},
+  title   = {The Fundamental Law of Active Management},
+  journal = {Journal of Portfolio Management},
+  volume  = {15},
+  number  = {3},
+  pages   = {30--37},
+  year    = {1989},
+  doi     = {10.3905/jpm.1989.409211}
+}
+
+@book{grinold2000,
+  author    = {Grinold, Richard C. and Kahn, Ronald N.},
+  title     = {Active Portfolio Management: A Quantitative Approach for Producing
+               Superior Returns and Controlling Risk},
+  edition   = {2nd},
+  publisher = {McGraw-Hill},
+  year      = {2000}
+}
+
+@article{sharpe1966,
+  author  = {Sharpe, William F.},
+  title   = {Mutual Fund Performance},
+  journal = {Journal of Business},
+  volume  = {39},
+  number  = {1},
+  pages   = {119--138},
+  year    = {1966},
+  doi     = {10.1086/294846}
+}
+
+@article{sortino1991,
+  author  = {Sortino, Frank A. and van der Meer, Robert},
+  title   = {Downside Risk},
+  journal = {Journal of Portfolio Management},
+  volume  = {17},
+  number  = {4},
+  pages   = {27--31},
+  year    = {1991},
+  doi     = {10.3905/jpm.1991.409343}
+}
+
+@article{young1991,
+  author  = {Young, Terry W.},
+  title   = {Calmar Ratio: A Smoother Tool},
+  journal = {Futures},
+  volume  = {20},
+  number  = {1},
+  pages   = {40},
+  year    = {1991},
+  note    = {Trade publication; used as secondary reference only}
+}
+
+% ── 10. RISK MEASURES AND PORTFOLIO THEORY ──────────────────
+
+@article{markowitz1952,
+  author  = {Markowitz, Harry},
+  title   = {Portfolio Selection},
+  journal = {Journal of Finance},
+  volume  = {7},
+  number  = {1},
+  pages   = {77--91},
+  year    = {1952},
+  doi     = {10.2307/2975974}
+}
+
+@article{rockafellar2000,
+  author  = {Rockafellar, R. Tyrrell and Uryasev, Stanislav},
+  title   = {Optimization of Conditional Value-at-Risk},
+  journal = {Journal of Risk},
+  volume  = {2},
+  number  = {3},
+  pages   = {21--41},
+  year    = {2000},
+  doi     = {10.21314/JOR.2000.038}
+}
+
+% ── 11. FEATURE ENGINEERING FOR FINANCIAL TIME SERIES ───────
+
+@book{murphy1999,
+  author    = {Murphy, John J.},
+  title     = {Technical Analysis of the Financial Markets},
+  publisher = {New York Institute of Finance},
+  year      = {1999}
+}
+
+@article{brock1992,
+  author  = {Brock, William and Lakonishok, Josef and LeBaron, Blake},
+  title   = {Simple Technical Trading Rules and the Stochastic Properties of
+             Stock Returns},
+  journal = {Journal of Finance},
+  volume  = {47},
+  number  = {5},
+  pages   = {1731--1764},
+  year    = {1992},
+  doi     = {10.2307/2328994}
+}
+
+% ── 12. PROBABILITY CALIBRATION ─────────────────────────────
+
+@incollection{platt1999,
+  author    = {Platt, John C.},
+  title     = {Probabilistic Outputs for Support Vector Machines and Comparisons to
+               Regularized Likelihood Methods},
+  booktitle = {Advances in Large Margin Classifiers},
+  editor    = {Smola, Alexander J. and Bartlett, Peter and Sch{\"o}lkopf, Bernhard
+               and Schuurmans, Dale},
+  pages     = {61--74},
+  publisher = {MIT Press},
+  year      = {1999}
+}
+
+@inproceedings{niculescumizil2005,
+  author    = {Niculescu-Mizil, Alexandru and Caruana, Rich},
+  title     = {Predicting Good Probabilities with Supervised Learning},
+  booktitle = {Proceedings of the 22nd International Conference on Machine Learning
+               (ICML)},
+  pages     = {625--632},
+  year      = {2005},
+  doi       = {10.1145/1102351.1102430}
+}
+
+@article{degroot1983,
+  author  = {DeGroot, Morris H. and Fienberg, Stephen E.},
+  title   = {The Comparison and Evaluation of Forecasters},
+  journal = {Journal of the Royal Statistical Society: Series D (The Statistician)},
+  volume  = {32},
+  number  = {1--2},
+  pages   = {12--22},
+  year    = {1983},
+  doi     = {10.2307/2987588}
+}
+
+% ── 13. LEGAL, ETHICAL AND PROFESSIONAL ─────────────────────
+
+@techreport{fca2018,
+  author      = {{Financial Conduct Authority}},
+  title       = {Algorithmic Trading Compliance in Wholesale Markets},
+  institution = {Financial Conduct Authority},
+  year        = {2018},
+  url         = {https://www.fca.org.uk/publications/multi-firm-reviews/algorithmic-trading-compliance-wholesale-markets}
+}
+
+@misc{mifid2014,
+  author       = {{European Parliament}},
+  title        = {Directive 2014/65/{EU} on Markets in Financial Instruments ({MiFID II})},
+  howpublished = {Official Journal of the European Union},
+  year         = {2014},
+  url          = {https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32014L0065}
+}
+
+@article{kirilenko2017,
+  author  = {Kirilenko, Andrei and Kyle, Albert S. and Samadi, Mehrdad and
+             Tuzun, Tugkan},
+  title   = {The Flash Crash: High-Frequency Trading in an Electronic Market},
+  journal = {Journal of Finance},
+  volume  = {72},
+  number  = {3},
+  pages   = {967--998},
+  year    = {2017},
+  doi     = {10.1111/jofi.12498}
+}
+
+@misc{acm2018,
+  author       = {{Association for Computing Machinery}},
+  title        = {{ACM} Code of Ethics and Professional Conduct},
+  howpublished = {Association for Computing Machinery},
+  year         = {2018},
+  url          = {https://www.acm.org/code-of-ethics}
+}
+
+@misc{bcs2022,
+  author       = {{British Computer Society}},
+  title        = {{BCS} Code of Conduct},
+  howpublished = {British Computer Society},
+  year         = {2022},
+  url          = {https://www.bcs.org/membership-and-registrations/become-a-member/bcs-code-of-conduct/}
+}
+
+@book{pasquale2015,
+  author    = {Pasquale, Frank},
+  title     = {The Black Box Society: The Secret Algorithms That Control Money
+               and Information},
+  publisher = {Harvard University Press},
+  year      = {2015}
+}
+
+% ── 14. EXPONENTIAL SMOOTHING ────────────────────────────────
+
+@book{brown1959,
+  author    = {Brown, Robert G.},
+  title     = {Statistical Forecasting for Inventory Control},
+  publisher = {McGraw-Hill},
+  year      = {1959}
+}
+
+@article{gardner1985,
+  author  = {Gardner, Everette S.},
+  title   = {Exponential Smoothing: The State of the Art},
+  journal = {Journal of Forecasting},
+  volume  = {4},
+  number  = {1},
+  pages   = {1--28},
+  year    = {1985},
+  doi     = {10.1002/for.3980040103}
+}
+
+% ── 15. ROBUST PREPROCESSING ─────────────────────────────────
+
+@book{huber1981,
+  author    = {Huber, Peter J.},
+  title     = {Robust Statistics},
+  publisher = {Wiley},
+  year      = {1981},
+  doi       = {10.1002/0471725250}
+}
+
+@article{rousseeuw1993,
+  author  = {Rousseeuw, Peter J. and Croux, Christophe},
+  title   = {Alternatives to the Median Absolute Deviation},
+  journal = {Journal of the American Statistical Association},
+  volume  = {88},
+  number  = {424},
+  pages   = {1273--1283},
+  year    = {1993},
+  doi     = {10.2307/2291267}
+}
+
+% ── 16. HYPERPARAMETER SENSITIVITY AND VALIDATION ───────────
+
+@article{bergstra2012,
+  author  = {Bergstra, James and Bengio, Yoshua},
+  title   = {Random Search for Hyper-Parameter Optimization},
+  journal = {Journal of Machine Learning Research},
+  volume  = {13},
+  pages   = {281--305},
+  year    = {2012}
+}
+
+@article{probst2019,
+  author  = {Probst, Philipp and Wright, Marvin N. and Boulesteix, Anne-Laure},
+  title   = {Hyperparameters and Tuning Strategies for Random Forest},
+  journal = {WIREs Data Mining and Knowledge Discovery},
+  volume  = {9},
+  number  = {3},
+  pages   = {e1301},
+  year    = {2019},
+  doi     = {10.1002/widm.1301}
+}

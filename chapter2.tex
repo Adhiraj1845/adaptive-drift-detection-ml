@@ -1,0 +1,258 @@
+% ============================================================
+%  chapters/chapter2.tex
+%  Methodology
+%  COMP3931 Individual Project  Adhiraj Kumar  2025/26
+% ============================================================
+
+\chapter{Methodology}
+\label{ch:methodology}
+
+Chapter~1 established the problem and the theoretical tools to approach it. Financial markets shift between qualitatively different regimes. No single detector covers all three types of distributional change. Blended updates outperform both static models and full retraining. This chapter turns those conclusions into a working system. Each design choice here connects to a specific requirement, theoretical result, or empirical finding from Chapter~1.
+
+% -----------------------------------------------------------
+\section{Problem Formulation}
+\label{sec:problem_formulation}
+% -----------------------------------------------------------
+
+\subsection{Binary Classification Task}
+
+The task is predicting whether a financial instrument will close higher or lower on the next trading day. Let $C_t$ denote the closing price on trading day $t$, and $\mathbf{x}_t \in \mathbb{R}^d$ the feature vector constructed from market data available at the close of day $t$. The next day log return, which is additive over time so that multi day returns are simply their sum, is:
+
+\begin{equation}
+  r_{t+1} = \log \frac{C_{t+1}}{C_t}
+  \label{eq:log_return}
+\end{equation}
+
+The binary classification target is the sign of this return:
+
+\begin{equation}
+  y_{t+1} = \mathbf{1}[r_{t+1} > 0] \;\in\; \{0, 1\}
+  \label{eq:target}
+\end{equation}
+
+A classifier $f_\theta : \mathbb{R}^d \to [0,1]$ estimates the probability of an up day: $\hat{p}_{t+1} = P(y_{t+1} = 1 \mid \mathbf{x}_t)$. The binary label follows by thresholding at 0.5.
+
+Binary classification is chosen over regression for three reasons, each specific to the financial setting. First, directional accuracy determines whether to go long or short on a given day. A model that predicts $r_{t+1} = +0.3\%$ when the true return is $+1.2\%$ still makes the correct trading decision, whereas mean squared error treats this as a large penalty~\cite{gu2020}. Second, financial return distributions have extremely heavy tails. A single crash day return can be 10 to 20 standard deviations from the mean. Under a regression objective, these outliers dominate the loss and destabilise training, whereas a binary target is bounded by construction and unaffected by the magnitude of the return~\cite{rapach2013}. Third, the Information Coefficient framework used for evaluation in Section~\ref{subsec:ic} is defined over rank correlations between predicted probabilities and realised directions, making a probabilistic binary output a natural fit~\cite{grinold2000}.
+
+\subsection{The Non Stationarity Problem}
+
+A static classifier assumes the joint distribution $P(\mathbf{x}_t, y_{t+1})$ is fixed. In financial markets it is not. Structural breaks, volatility regime transitions, and microstructure changes all shift this distribution in ways that invalidate a model trained on earlier data~\cite{hamilton1989,lo2004amh}. All three drift types from Chapter~1 arise here. A framework that cannot respond will accumulate prediction error silently.
+
+\subsection{Sequential Evaluation Protocol}
+
+Look ahead bias is the central pitfall in financial backtesting. It means using future information to make predictions about the past. It is bad because the resulting accuracy figures look plausibly good rather than obviously wrong. A model that inadvertently uses tomorrow's opening price to predict tomorrow's direction will achieve near perfect accuracy in simulation but will be useless in live trading. The academic and practitioner literatures are full of backtested strategies that appeared exceptional in simulation and failed completely in deployment because of exactly this error~\cite{rapach2013}. Four protocol rules prevent it here.
+
+First, every feature on day $t$ uses only data available at the close of day $t$. Second, the train/test split is strictly sequential: the model trains on the three calendar years before each sub period start (approximately 756 trading days), across four evaluation windows: \emph{early} (2015 to 2019), \emph{std} (2018 to 2024), \emph{covid} (2020 to 2024), and \emph{recent} (2022 to 2024)~\cite{hamilton1989,ang2012regime}. Third, the static baseline's parameters are frozen at the end of training and never updated. Fourth, every adaptive retrain uses only data available at the time of the trigger. No future data is consulted to determine whether the retrain was beneficial. Compliance with all four rules is verified programmatically by the data layer unit test described in Chapter~3, Section~\ref{subsec:unit_tests}.
+
+% -----------------------------------------------------------
+\section{Data Collection and Preparation}
+\label{sec:data}
+% -----------------------------------------------------------
+
+\subsection{Data Sources}
+
+Price and volume data for all 50 instruments were sourced from Yahoo Finance via \texttt{yfinance}. Daily OHLCV data (Open, High, Low, Close, Volume) were downloaded from January 2010 to December 2024. Macro series features were sourced from FRED via \texttt{fredapi}. Both sources are publicly available and used under their respective terms of service (Appendix~B).
+
+\subsection{Feature Engineering}
+\label{subsec:features}
+
+All features use only OHLCV data available before the close of day $t$. The vector $\mathbf{x}_t \in \mathbb{R}^d$ comprises six groups.
+
+\paragraph{Return features.}
+Simple return $\rho_t = (C_t - C_{t-1})/C_{t-1}$ and log return $r_t = \log(C_t/C_{t-1})$.
+
+\paragraph{Volatility features.}
+Rolling realised volatility over four lookback windows:
+
+\begin{equation}
+  \sigma_{\tau,t} = \sqrt{\frac{1}{\tau-1} \sum_{i=0}^{\tau-1} (r_{t-i} - \bar{r}_{\tau,t})^2},
+  \quad \tau \in \{5, 10, 20, 60\}
+  \label{eq:realised_vol}
+\end{equation}
+
+The four horizons capture intra week noise (5 days), mean reversion dynamics (10 days), the GARCH volatility half life (where GARCH, Generalised Autoregressive Conditional Heteroskedasticity, describes how financial volatility clusters so that calm periods tend to follow calm periods and turbulent ones tend to follow turbulent ones~\cite{engle1982,bollerslev1986}) (20 days), and Hamilton regime onset~\cite{hamilton1989} (60 days), consistent with Gu et al.~\cite{gu2020}.
+
+\paragraph{Momentum features.}
+Cumulative log return over the same four windows:
+$m_{\tau,t} = \sum_{i=0}^{\tau-1} r_{t-i}$, $\tau \in \{5, 10, 20, 60\}$.
+A positive $m_{\tau,t}$ means prices have been rising over $\tau$ days.
+
+\paragraph{Drawdown.}
+Rolling maximum drawdown captures sustained price declines independently of volatility:
+
+\begin{equation}
+  \text{DD}_{\tau,t} = \frac{C_t}{\max_{i \in [t-\tau+1,\,t]} C_i} - 1,
+  \quad \tau \in \{5, 10, 20, 60\}
+  \label{eq:drawdown}
+\end{equation}
+
+$\text{DD}_{\tau,t} \leq 0$ always. A value of zero means today's close equals the $\tau$ day high.
+
+\paragraph{OHLCV ratio features.}
+Three scale invariant features summarise intra day price and volume structure:
+
+\begin{equation}
+  \text{HL}_t = \frac{H_t - L_t}{C_t}, \quad
+  \text{CO}_t = \frac{C_t - O_t}{O_t}, \quad
+  \text{VChg}_t = \frac{V_t - V_{t-1}}{V_{t-1}}
+  \label{eq:ohlcv_ratios}
+\end{equation}
+
+\paragraph{Volume Z score and trend regime features.}
+The volume Z score measures how unusual today's trading activity is relative to recent history. High volume during a price move tends to signal institutional participation and sustained regime transitions~\cite{brock1992}:
+
+\begin{equation}
+  Z^{V}_{\tau,t} = \frac{V_t - \bar{V}_{\tau,t}}{\sigma^{V}_{\tau,t}},
+  \quad \tau \in \{5, 10, 20, 60\}
+  \label{eq:vol_zscore}
+\end{equation}
+
+Two trend features measure where today's close sits relative to its rolling mean in standard deviation units. This is a price Z score that identifies whether the instrument is in an extended trend:
+
+\begin{equation}
+  Z^{P}_{\tau,t} = \frac{C_t - \text{MA}_{\tau,t}}{\sigma_{\tau,t}},
+  \quad \tau \in \{20, 60\}; \qquad
+  \text{MACross}_t = \frac{\text{MA}_{20,t} - \text{MA}_{60,t}}{\text{MA}_{60,t}}
+  \label{eq:price_zscore}
+\end{equation}
+
+A positive $\text{MACross}_t$, meaning the 20 day mean sits above the 60 day mean, is the classic golden cross upward alignment~\cite{brock1992}.
+
+The full feature vector has dimension $d{=}33$. The look ahead prevention test in Section~\ref{subsec:unit_tests} verifies no feature uses data from day $t{+}1$ or later.
+
+\subsection{Preprocessing and Quality Checks}
+
+Features are scaled using \texttt{RobustScaler}, which centres on the median and scales by the interquartile range (IQR)~\cite{huber1981,rousseeuw1993}:
+
+\begin{equation}
+  \tilde{x}_{j,t} = \frac{x_{j,t} - \text{median}(x_j)}{\text{IQR}(x_j)}
+  \label{eq:robust_scaler}
+\end{equation}
+
+Financial returns are leptokurtic, which means their tails are heavier than a Gaussian. A single crash day return can inflate the standard deviation and compress all other values toward zero. The median and IQR are resistant to such outliers by construction, making \texttt{RobustScaler} more appropriate than \texttt{StandardScaler} here~\cite{engle1982,bollerslev1986}. Median and IQR are computed on the training window only. Missing prices are forward filled. Non finite warm up values are set to zero. Instruments with more than 5\% missing values or fewer than 1,200 clean trading days were excluded. None of the 50 instruments triggered either threshold.
+
+% -----------------------------------------------------------
+\section{Detector Design Rationale}
+\label{sec:detector_rationale}
+% -----------------------------------------------------------
+
+\subsection{Requirements Driving Detector Selection}
+
+Choosing a detector depends on what information is available at detection time and what type of shift must be caught. Four requirements follow from the problem structure.
+
+\begin{enumerate}
+  \item \textbf{Label free operation.} The true label $y_{t+1}$ is unavailable until
+    the next trading day. Any detector requiring labelled feedback cannot monitor
+    drift before accuracy degrades.
+  \item \textbf{Coverage of all three drift types.} A single detector misses shift
+    types that do not propagate to its signal~\cite{gama2014survey}. A composite
+    stack is required.
+  \item \textbf{Normalisable output.} All component scores must be normalisable to
+    $[0,1]$ for aggregation into the composite drift index.
+  \item \textbf{Computational feasibility.} At least one detector must operate in
+    $\mathcal{O}(1)$ time and space to keep streaming extensions feasible.
+\end{enumerate}
+
+\subsection{Selected Detectors and Their Roles}
+
+\textbf{Page Hinkley (PH)}~\cite{page1954,mouss2004} is the minimum detector satisfying all four requirements. It detects persistent upward shifts in rolling log loss (a penalty score that increases the more confidently the model is wrong) via a CUSUM formulation (Cumulative Sum: a technique that accumulates small deviations over time so that a sustained shift eventually crosses a threshold, rather than reacting to any single spike), operates in $\mathcal{O}(1)$ time and space, and requires only predicted probabilities. Whether monitoring upstream feature distributions provides earlier warning is an empirical question. Three supplementary detectors test this. Results are in Chapter~4, Section~\ref{subsec:det_ablation}. As Chapter~4 shows, PH alone suffices because the cumulative sum of log loss deviations catches the shift almost as early as any feature distribution change. The additional lead time from KS, PSI, or JS is negligible in financial data, where persistent prediction errors begin accumulating within days of a regime shift.
+
+\textbf{Kolmogorov Smirnov (KS)}~\cite{kolmogorov1933,smirnov1948} measures the largest gap between two empirical cumulative distribution functions, capturing how differently two samples are distributed. It is bounded in $[0,1]$, non parametric, and addresses covariate shift in $P(\mathbf{x})$.
+
+\textbf{Population Stability Index (PSI)}~\cite{siddiqi2006,basel2005} compares the proportion of observations in each decile bin between the reference and current windows. Developed in credit risk monitoring, it has established threshold conventions: PSI below 0.10 is stable, 0.10 to 0.25 is moderate shift, and 0.25 or above is significant. It captures smooth population shifts that KS's supremum statistic may miss. Decile binning (10 bins) is standard in Basel~II monitoring and keeps expected bin counts above five in a 100 row window.
+
+\textbf{Jensen Shannon divergence (JS)}~\cite{lin1991,shannon1948} is applied to the model's output probability distributions, monitoring prediction drift. JS is preferred over KL divergence because it is symmetric and bounded in $[0, \ln2]$, enabling normalisation to $[0,1]$.
+
+ADWIN~\cite{bifet2007adwin}, DDM~\cite{gama2004ddm}, and EDDM~\cite{baenagarcia2006eddm} require the true label at detection time, failing requirement~1. They are also blind to covariate shift, failing requirement~2. The synthetic benchmark confirms the consequence: ADWIN achieves 0.2\% true positive rate on feature drift tasks where PSI+PH achieves 93 to 100\%. Kifer et al.~\cite{kifer2004} add overhead over PSI class methods with no sensitivity gain~\cite{rabanser2019}. The full comparison is in Table~\ref{tab:detector_comparison} (Chapter~1).
+
+% -----------------------------------------------------------
+\section{Parameter Justification}
+\label{sec:param_justification}
+% -----------------------------------------------------------
+
+\subsection{Rolling Window Size: \texttt{window\_size} = 100}
+\label{subsec:param_window}
+
+At $n{=}100$ and $\alpha{=}0.05$, the KS critical value $D_{0.05} \approx 0.192$ detects Gaussian mean shifts of approximately $0.5\sigma$, which is the typical magnitude at regime onset. Reducing to $n{=}60$ raises the critical value to $0.248$, missing sub $0.7\sigma$ shifts. Hamilton~\cite{hamilton1989} estimates short US regimes at 60 to 80 trading days, so a 100 day window stays within a single regime while satisfying the statistical power bound. Extending beyond 150 days risks spanning two consecutive regimes, contaminating the reference distribution with pre and post shift observations and reducing detection sensitivity. Sensitivity analysis confirms that the coefficient of variation (CV, defined as standard deviation divided by mean, measuring relative variability across the grid) of accuracy delta is below 3 for 13 of 16 tickers across the 100 to 150 day range (Chapter~4, Section~\ref{sec:sensitivity}).
+
+\subsection{Cooldown Period: \texttt{cooldown\_days} = 5}
+\label{subsec:param_cooldown}
+
+After any retrain, alarm signals are suppressed for 5 trading days. MiFID~II Article~5~\cite{mifid2014} mandates T+2 settlement for EU equity markets, so a 5 day cooldown provides a 2.5 cycle buffer before conflicting position changes can arise. Separately, 43\% of low accuracy days fall within 5 days of a prior drift event (Figure~\ref{fig:error_lag}, Appendix~B), so the window also prevents redundant retrains during post drift turbulence.
+
+\subsection{Composite Drift Index Weights: 0.4 / 0.3 / 0.3}
+\label{subsec:param_weights}
+
+\begin{equation}
+  \mathcal{D}_t = 0.4 \cdot s_{\text{feature},t}
+                + 0.3 \cdot s_{\text{prediction},t}
+                + 0.3 \cdot s_{\text{performance},t}
+  \label{eq:composite_ch2}
+\end{equation}
+
+The weights reflect causal ordering. A shift in $P(\mathbf{x})$ is upstream of a shift in $P(\hat{y} \mid \mathbf{x})$, which is upstream of $P(\text{loss})$ degradation~\cite{gama2014survey}. The earliest signal receives the greatest weight. Weights were set heuristically before any experiments ran.
+
+\subsection{Calibration Percentiles: 60th / 75th / 90th / 95th}
+\label{subsec:param_calibration}
+
+The four action tiers map to the 60th, 75th, 90th, and 95th percentiles of each asset's reference window drift index. A fixed global threshold is inappropriate: a 310 basis point (one basis point is 0.01\% of value, so 310 basis points is a 3.1\% move) daily move in Bitcoin is routine, whereas the same move in a US Treasury ETF signals a rate shock. Data driven, asset specific thresholds outperform fixed ones under non stationarity~\cite{bifet2007adwin}. When the reference window contains fewer than 50 observations, the module falls back to default limits (low $=$ 0.6, moderate $=$ 1.0, high $=$ 1.5, severe $=$ 2.0).
+
+\subsection{Exponential Moving Average (EMA) Smoothing: $\alpha = 0.10$}
+\label{subsec:param_ema}
+
+\begin{equation}
+  \tilde{\mathcal{D}}_t = 0.10 \cdot \mathcal{D}_t + 0.90 \cdot \tilde{\mathcal{D}}_{t-1}
+  \label{eq:ema_ch2}
+\end{equation}
+
+An EMA applies more weight to recent observations and less to older ones, controlled by the smoothing parameter $\alpha$. At $\alpha = 0.10$ the EMA half life is approximately 6.6 trading days, suppressing single day artefacts from fat tailed returns without masking genuine sustained shifts~\cite{gardner1985,brown1959}. This timescale is mutually consistent with the 5 day cooldown: a post drift turbulence spike dissipates before the next alarm window opens.
+
+\subsection{Weighted Ensemble Blend: $\gamma = 0.15$}
+\label{subsec:param_gamma}
+
+\begin{equation}
+  \theta_{\text{new}} = (1 - \gamma)\,\theta_{\text{old}} + \gamma\,\theta_{\text{recent}}
+  \label{eq:gamma_ch2}
+\end{equation}
+
+Setting $\gamma = 0.15$ blends 85\% of prior parameters with 15\% of recent window parameters. This convex combination is well defined for linear models whose parameters are real-valued vectors; for tree-based ensemble models (Gradient Boosting, Random Forest), direct parameter blending is not applicable, and adaptation takes the form of a full batch retrain on the rolling window. In the SGD strategy, $\gamma$ governs a prediction-level blend between the online logistic regression component and the primary tree-based predictor. The Herbster and Warmuth~\cite{herbster1998} regret bound $\mathcal{O}(\sqrt{T\ln N})$ motivates retaining prior parameters rather than full replacement at each update. The value is consistent with Hamilton's~\cite{hamilton1989} finding that financial regimes persist for months, so historical data retains predictive value after a regime transition. In the retrain ablation (Chapter~4, Table~\ref{tab:retrain_summary}), the SGD weighted update at $\gamma{=}0.15$ achieves the highest $\Delta$Sharpe of $+0.128$. The Sharpe ratio measures annualised return divided by annualised return volatility; $\Delta$Sharpe is the adaptive model's Sharpe minus the static model's Sharpe, so a positive value means the adaptive model earns more return per unit of risk.
+
+\subsection{Position Gate Weights: 0.60 / 0.40}
+\label{subsec:param_gate}
+
+Rather than switching between static and adaptive models with a hard binary switch, which would amplify calibration errors whenever the adaptive model is activated in a non drift period, the position gate blends their outputs continuously as a function of detected drift severity:
+
+\begin{equation}
+  w_{\text{adapt}} = \text{clip}\!\left(
+    0.60 \cdot \tilde{\mathcal{D}}_t + 0.40 \cdot \tilde{s}_{\text{perf},t},\;
+    0.25,\; 0.90
+  \right)
+  \label{eq:gate_ch2}
+\end{equation}
+
+The 0.60/0.40 split reflects causal asymmetry. The drift signal $\tilde{\mathcal{D}}_t$ fires at lag zero relative to the distributional change. It monitors upstream feature distributions that shift before model accuracy degrades. The performance signal $\tilde{s}_{\text{perf},t}$ lags by 11.0 days on average, because it only rises after the error stream has already accumulated evidence of degradation. In a causal system, the upstream signal should receive the greater weight. Weighting $\tilde{\mathcal{D}}_t$ at 0.60 and $\tilde{s}_{\text{perf},t}$ at 0.40 is therefore the natural default. Post hoc support comes from the Chapter~4 results: drift active days produce a $4.6\times$ larger mean accuracy delta than quiet days (BCa 95\% CI $[{+}0.0082,{+}0.0116]$, Section~\ref{subsec:drift_conditional}). BCa stands for bias corrected and accelerated bootstrapping, a method for computing confidence intervals that corrects for skew in the underlying data distribution; the interval $[{+}0.0082,{+}0.0116]$ means we are 95\% confident the true accuracy gain on drift active days lies in that range.
+
+The clip bounds $[0.25, 0.90]$ prevent degenerate outcomes. The adaptive model always contributes at least 25\% and the static model retains at least 10\%, so neither is ever fully discarded. The static model's parameters remain frozen throughout. Only the blend weight applied to its output varies with drift severity, not the model itself. The split was not grid searched. Data driven weight optimisation is unavailable within the strictly sequential evaluation protocol and is noted as a limitation in Section~\ref{sec:limitations}.
+
+\subsection{Minimum Retrain Rows and Out-of-Sample (OOS) Rollback}
+\label{subsec:param_minrows}
+
+At 252 trading days per year, \texttt{min\_retrain\_rows = 400} corresponds to approximately 19 months. This is the minimum needed to avoid forcing pre shift data into every retrain. It is an architectural constraint, not a tunable parameter. Section~\ref{sec:sensitivity} confirms values from 200 to 500 rows produce identical 2022 degradation. After each retrain, the new model is validated on the 20 most recent rows that were not used for training (the out-of-sample holdout). If accuracy falls more than 8 percentage points below the pre retrain model, the controller reverts to the previous snapshot.
+
+% -----------------------------------------------------------
+\section{Model Selection}
+\label{sec:model_selection}
+% -----------------------------------------------------------
+
+Three base classifiers span the bias variance frontier. Random Forest (RF) reduces variance through bagging, which means training many decision trees on random subsets of data and averaging their predictions so that no single noisy tree dominates the output. Gradient Boosted Machine (GBM) reduces bias through residual fitting, meaning each new tree corrects the errors of the previous one and gradually improves accuracy on the training distribution. Logistic Regression (LR) provides an interpretable linear baseline against which the non linear gains of the tree based models can be cleanly measured~\cite{breiman2001,friedman2001}.
+
+Krauss et al.~\cite{krauss2017} validate RF and GBM as the best performing classifiers for next day S\&P~500 return direction, the same task used here. Including all three tests whether the adaptive benefit generalises across inductive biases rather than being specific to one model family. LSTMs were excluded on two independent grounds. First, tree based models outperform them on tabular OHLCV data~\cite{krauss2017,rapach2013}. Second, mini batch training is structurally incompatible with discrete sliding window retrains, which replace the full training set at each trigger event.
+
+% -----------------------------------------------------------
+\section{Project Risk and Version Control}
+\label{sec:risk_analysis}
+% -----------------------------------------------------------
+
+Five principal risks were identified at project inception. Mitigations are embedded in the framework design. Table~\ref{tab:risk_register} in Appendix~B summarises each risk, its assessed likelihood and impact, and the corresponding mitigation.
+
+The codebase is managed on GitHub using Git throughout the full development lifecycle. Each component was developed on a separate branch and merged into main only after its unit tests passed, enforcing the phased development structure described in Chapter~3. Commits were made at each meaningful milestone: after completing a component, after each experiment run, and after any bug fix that changed a result. Every results CSV and figure is committed alongside the code that generated it. This means any number in Chapter~4 can be traced back to the exact script and parameter configuration that produced it, and the full project can be reproduced from a clean clone with a single command. A Gantt chart of the project timeline, showing the phased development schedule and key milestones, is provided in Figure~\ref{fig:timeline} in Appendix~\ref{app:supporting}.

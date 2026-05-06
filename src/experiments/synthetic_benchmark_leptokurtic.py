@@ -1,32 +1,4 @@
-"""
-Leptokurtic synthetic drift benchmark.
-
-Extends the Gaussian synthetic benchmark (synthetic_benchmark.py) to
-Student-t distributed streams with degrees of freedom ν ∈ {3, 5}, matching
-the excess kurtosis of real financial return distributions.
-
-The claim in Chapter 3 is that Gaussian benchmark results constitute a
-"conservative lower bound" on detection sensitivity.  This script tests
-that claim directly: if TPR under Student-t is comparable to or higher than
-Gaussian TPR, the lower-bound claim is validated.  If TPR drops substantially,
-the claim must be revised.
-
-Scenarios
----------
-  Each run: N(0,1) or t(ν) pre-drift, t(ν, μ=Δ) post-drift
-  Shift magnitudes: Δμ ∈ {0.5σ, 1.0σ, 2.0σ}
-  Distributions:    Gaussian, Student-t(ν=5), Student-t(ν=3)
-  Detectors:        KS, PSI, JS, Composite (KS+PSI+JS), ADWIN (if river installed)
-
-Output
-------
-  results/synthetic_leptokurtic_chart.png
-  results/synthetic_leptokurtic_results.csv   (summary table)
-
-Usage
------
-    python -m src.experiments.synthetic_benchmark_leptokurtic
-"""
+"""Leptokurtic synthetic benchmark: TPR/FPR under Student-t streams vs Gaussian."""
 from __future__ import annotations
 
 import sys

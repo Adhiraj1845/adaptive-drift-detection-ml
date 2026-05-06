@@ -1,30 +1,4 @@
-"""
-Volatility regime conditional analysis.
-
-Tests whether adaptive retraining benefits are concentrated in high-volatility
-regimes (the environments where distribution drift is most likely).
-
-Method:
-  1. Compute rolling 21-day realised volatility of return_next for each CSV
-  2. Classify each day as: low-vol (< 33rd pct), med-vol, high-vol (> 67th pct)
-  3. Run McNemar + compute acc_delta on each volatility tercile
-  4. Aggregate across all runs
-
-Hypothesis: adaptive acc_delta should be largest in high-vol tercile.
-
-Also computes:
-  - Sharpe ratio conditional on volatility regime
-  - Drift alarm rate per volatility tercile (validates detector sensitivity)
-
-Output
-------
-  results/regime_analysis.csv          -- per-run tercile stats
-  results/regime_analysis_charts.png   -- 4-panel visualisation
-
-Usage
------
-    python -m src.experiments.regime_analysis
-"""
+"""Volatility regime analysis: acc_delta and alarm rate stratified by low/med/high-vol tercile."""
 from __future__ import annotations
 
 import sys

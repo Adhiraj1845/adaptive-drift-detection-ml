@@ -1,25 +1,4 @@
-"""
-Error-trigger redundancy analysis.
-
-Empirically demonstrates why error-rate-triggered retraining adds zero independent
-retrains when distribution-based drift detection is active.
-
-Hypothesis: accuracy degradation is a lagging indicator of distribution drift.
-By the time the 30-day rolling static accuracy drops below 0.45, the drift
-detector has already flagged the period (action != "none").
-
-Method: for every day in each daily monitoring CSV, compute the rolling 30-day
-static accuracy and check whether the drift detector was already active.
-
-Output
-------
-  results/error_trigger_analysis.csv   — per-run summary
-  results/error_trigger_lag.png        — lag distribution chart
-
-Usage
------
-    python -m src.experiments.error_trigger_analysis
-"""
+"""Quantify how often error-rate-triggered retraining is pre-empted by drift detection."""
 from __future__ import annotations
 
 import os
@@ -74,14 +53,11 @@ def analyse_error_trigger_redundancy(
         df["rolling_acc_30"] = df["static_correct"].rolling(_WINDOW).mean()
         df["drift_active"]   = (df["action"] != "none").astype(int)
 
-        # Days where acc < threshold AND drift already active (error trigger would be blocked)
         low_acc_mask     = df["rolling_acc_30"] < _ACC_THRESHOLD
         low_acc_days     = df[low_acc_mask]
         blocked_by_drift = df[low_acc_mask & (df["drift_active"] == 1)]
         would_be_novel   = df[low_acc_mask & (df["drift_active"] == 0)]
 
-        # For novel days (acc low, drift NOT active), how long ago was last drift event?
-        # This measures how long after the last drift event accuracy stays low
         last_drift_day = None
         lags = []
         for i, row in df.iterrows():
@@ -137,7 +113,6 @@ def _plot_lag(lag_days_all: list[int], df_out: pd.DataFrame, path: str) -> None:
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-        # ── Left: distribution of lag (days between last drift event and acc drop) ──
         ax = axes[0]
         if lag_days_all:
             ax.hist(lag_days_all, bins=30, color="#2c7bb6", edgecolor="white", alpha=0.85)
@@ -152,7 +127,6 @@ def _plot_lag(lag_days_all: list[int], df_out: pd.DataFrame, path: str) -> None:
                     ha="center", va="center", transform=ax.transAxes, fontsize=12)
             ax.set_title("No novel error-trigger opportunities")
 
-        # ── Right: % blocked per run (scatter) ─────────────────────────────────
         ax2 = axes[1]
         ax2.hist(df_out["pct_blocked"].dropna(), bins=20,
                  color="#1a9641", edgecolor="white", alpha=0.85)
