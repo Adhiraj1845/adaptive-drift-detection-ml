@@ -19,7 +19,7 @@ data/
 Thumbs.db
 .vscode/
 .idea/
-
+.claude/
 # Test coverage
 .coverage
 htmlcov/
